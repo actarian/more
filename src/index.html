@@ -1,0 +1,13 @@
+<!-- @@master = ./templates/layout.html { "baseHref": "/more/" } -->
+<!-- @@block = main-->
+<div class="page">
+	<img class="mockup" src="img/background.png" />
+	<div class="aspect">
+		<div class="world" world>
+			<div class="world__background"></div>
+			<div model-more></div>
+			<div class="world__info" *if="error" [innerHTML]="error"></div>
+		</div>
+	</div>
+</div>
+<!-- @@close-->

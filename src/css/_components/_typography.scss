@@ -1,0 +1,88 @@
+body {
+	font-family: $font-primary;
+	font-weight: $font-light;
+	line-height: $line-height;
+	background: $background;
+	color: $foreground;
+
+	@include media-up(sm) {
+		font-size: $font-size;
+	}
+
+	@include media-down(xs) {
+		font-size: $font-size-xs;
+	}
+}
+
+b,
+strong {
+	font-weight: $font-semibold;
+}
+
+.h1,
+.h2,
+.h3,
+.h4,
+.h5 {
+	font-family: $font-primary;
+	font-weight: $font-semibold;
+}
+
+.h1 {
+	font-size: 4rem;
+	line-height: 1;
+	margin-bottom: 40px;
+}
+
+.h2 {
+	font-size: 3.5rem;
+	line-height: 1;
+	margin-bottom: 30px;
+}
+
+.h3 {
+	font-size: 3rem;
+	margin-bottom: 20px;
+}
+
+.h4 {
+	font-size: 2.5rem;
+	margin-bottom: 10px;
+}
+
+.h5 {
+	font-size: 2rem;
+}
+
+.h6 {
+	font-size: 1.5rem;
+}
+
+%category {
+	font-family: $font-secondary;
+	font-size: 26px;
+	line-height: 1.15;
+	font-weight: $font-medium;
+	text-transform: uppercase;
+
+	.icon {
+		margin-right: 5px;
+	}
+
+	@include media-down(md) {
+		font-size: 21px;
+	}
+}
+
+%title {
+	font-family: $font-secondary;
+	font-size: 50px;
+	line-height: 0.88;
+	font-weight: $font-medium;
+	text-transform: uppercase;
+
+	@include media-down(sm) {
+		font-size: 40px;
+		word-break: break-word;
+	}
+}

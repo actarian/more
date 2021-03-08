@@ -1,0 +1,196 @@
+body {
+  --font-primary: GT Walsheim, Maven Pro, Arial, sans-serif;
+  --font-secondary: GT Walsheim, Maven Pro, Arial, sans-serif;
+  --font-size: 18px;
+  --line-height: 1.77;
+  --font-extralight: 200;
+  --font-light: 300;
+  --font-regular: 400;
+  --font-semibold: 600;
+  --font-bold: 700;
+  --font-extrabold: 800;
+  --font-black: 900;
+  --btn-radius: 20px;
+  --card-radius: 30px;
+  --bullet-size: 12px; }
+
+body {
+  --background: #ffffff;
+  --background-negative: #101010;
+  --background-primary: #0099ff;
+  --background-secondary: #ff4332;
+  --background-tertiary: #d8dfe4;
+  --background-primary-disabled: #c4d3dd;
+  --background-primary-dimmed: rgba(0, 153, 255, 0.08);
+  --foreground: #101010;
+  --foreground-negative: #fcfcfc;
+  --foreground-primary: #0099ff;
+  --foreground-secondary: #ff4332;
+  --foreground-tertiary: #6d7b84;
+  --foreground-primary-disabled: #c4d3dd;
+  --foreground-primary-dimmed: rgba(0, 153, 255, 0.5);
+  --border: #101010;
+  --shadow: rgba(86, 125, 151, 0.65);
+  --black-10: rgba(16, 16, 16, 0.1);
+  --black-20: rgba(16, 16, 16, 0.2);
+  --black-30: rgba(16, 16, 16, 0.3);
+  --black-40: rgba(16, 16, 16, 0.4);
+  --black-50: rgba(16, 16, 16, 0.5);
+  --black-60: rgba(16, 16, 16, 0.6);
+  --black-70: rgba(16, 16, 16, 0.7);
+  --black-80: rgba(16, 16, 16, 0.8);
+  --black-90: rgba(16, 16, 16, 0.9); }
+
+@keyframes bouncing-ball {
+  from {
+    transform: translateY(0) scaleY(0.8); }
+  to {
+    transform: translateY(-10px); } }
+
+* {
+  box-sizing: border-box; }
+
+html {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -ms-scroll-chaining: none;
+      overscroll-behavior: none;
+  scroll-behavior: smooth;
+  --vh: 1vh; }
+
+body {
+  width: 100%;
+  min-height: 100%;
+  margin: 0;
+  padding: 0; }
+  body::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+    border-radius: 3px; }
+  body::-webkit-scrollbar-button {
+    display: none; }
+  body::-webkit-scrollbar-button:hover {
+    display: none; }
+  body::-webkit-scrollbar-thumb {
+    background-color: var(--black-40);
+    box-shadow: none;
+    border-radius: 2px; }
+    body::-webkit-scrollbar-thumb:hover {
+      background-color: var(--black-40); }
+  body::-webkit-scrollbar-track {
+    background-color: transparent;
+    border-radius: 2px; }
+    body::-webkit-scrollbar-track:hover {
+      background-color: transparent; }
+  body.fixed {
+    position: fixed; }
+  @media (max-width: 1023.98px) {
+    body {
+      overflow-x: hidden;
+      overflow-y: auto; } }
+
+img {
+  display: block;
+  max-width: 100%; }
+
+[unselectable] {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+      -ms-user-select: none;
+          user-select: none; }
+
+.app {
+  position: relative; }
+
+.hidden {
+  display: none; }
+
+.page {
+  position: relative;
+  background: #7140eb; }
+
+.mockup {
+  position: absolute;
+  width: 100%;
+  top: 0;
+  left: 0;
+  visibility: hidden; }
+
+.world {
+  width: 100%;
+  height: 100%; }
+  .world > canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    outline: none;
+    cursor: pointer; }
+
+.world__info {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translateX(-50%) translateY(-50%);
+  background: var(--black-30);
+  color: var(--foreground-negative);
+  padding: 13px 30px;
+  line-height: 1.1;
+  border-radius: 30px; }
+
+.aspect {
+  position: relative;
+  width: 100%;
+  padding-top: 51.25%;
+  overflow: hidden; }
+  .aspect > img,
+  .aspect > svg,
+  .aspect > video,
+  .aspect > canvas,
+  .aspect > .video,
+  .aspect > iframe {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover; }
+  .aspect .world {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%; }
+
+.world__background {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%; }
+  .world__background:before {
+    content: '';
+    background: #020024;
+    background: radial-gradient(circle, rgba(2, 0, 36, 0.797879) 0%, rgba(2, 0, 36, 0.5) 35%, rgba(2, 0, 36, 0) 100%);
+    position: absolute;
+    opacity: 0.9;
+    height: 100%;
+    width: 100%;
+    left: 0;
+    top: 0;
+    pointer-events: none; }
+  .world__background:after {
+    content: '';
+    background: url("https://s.cdpn.io/1715/noise-1.png");
+    position: absolute;
+    height: 100%;
+    width: 100%;
+    left: 0;
+    top: 0;
+    mix-blend-mode: multiply;
+    opacity: 1;
+    pointer-events: none; }
