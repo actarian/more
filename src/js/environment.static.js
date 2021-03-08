@@ -21,8 +21,8 @@ export const environmentStatic = {
 	},
 	logo: null,
 	background: {
-		image: '/b-here/img/background.jpg',
-		video: '/b-here/img/background.mp4',
+		image: '/more/img/background.jpg',
+		video: '/more/img/background.mp4',
 	},
 	colors: {
 		menuBackground: '#000000',
@@ -38,9 +38,9 @@ export const environmentStatic = {
 		disabledViewTypes: ['waiting-room', 'room-3d'],
 		disabledViewItemTypes: ['texture'],
 	},
-	assets: '/b-here/',
+	assets: '/more/',
 	worker: './js/workers/image.service.worker.js',
-	githubDocs: 'https://raw.githubusercontent.com/actarian/b-here/b-here-ws-new/docs/',
+	githubDocs: 'https://raw.githubusercontent.com/actarian/more/more-ws-new/docs/',
 	language: '',
 	market: '',
 	url: {

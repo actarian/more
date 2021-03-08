@@ -89,8 +89,8 @@ AppComponent.meta = {
   },
   logo: null,
   background: {
-    image: '/Modules/B-Here/Client/docs/img/background.jpg',
-    video: '/Modules/B-Here/Client/docs/img/background.mp4'
+    image: '/Modules/more/Client/docs/img/background.jpg',
+    video: '/Modules/more/Client/docs/img/background.mp4'
   },
   colors: {
     menuBackground: '#000000',
@@ -106,9 +106,9 @@ AppComponent.meta = {
     disabledViewTypes: ['waiting-room', 'room-3d'],
     disabledViewItemTypes: ['texture']
   },
-  assets: '/Modules/B-Here/Client/docs/',
-  worker: '/Modules/B-Here/Client/docs/js/workers/image.service.worker.js',
-  githubDocs: 'https://raw.githubusercontent.com/actarian/b-here/b-here-ws-new/docs/',
+  assets: '/Modules/more/Client/docs/',
+  worker: '/Modules/more/Client/docs/js/workers/image.service.worker.js',
+  githubDocs: 'https://raw.githubusercontent.com/actarian/more/more-ws-new/docs/',
   language: '/it',
   market: '/it',
   url: {
@@ -120,24 +120,24 @@ AppComponent.meta = {
     accessCode: '/access-code'
   },
   template: {
-    tryInAr: '/template/modules/b-here/try-in-ar.cshtml?viewId=$viewId',
+    tryInAr: '/template/modules/more/try-in-ar.cshtml?viewId=$viewId',
     modal: {
-      controlRequest: '/template/modules/b-here/control-request-modal.cshtml',
-      tryInAr: '/template/modules/b-here/try-in-ar-modal.cshtml',
+      controlRequest: '/template/modules/more/control-request-modal.cshtml',
+      tryInAr: '/template/modules/more/try-in-ar-modal.cshtml',
       view: {
-        'panorama': '/template/modules/b-here/panorama-modal.cshtml',
-        'panorama-grid': '/template/modules/b-here/panorama-grid-modal.cshtml',
-        'room-3d': '/template/modules/b-here/room-3d-modal.cshtml',
-        'model': '/template/modules/b-here/model-modal.cshtml'
+        'panorama': '/template/modules/more/panorama-modal.cshtml',
+        'panorama-grid': '/template/modules/more/panorama-grid-modal.cshtml',
+        'room-3d': '/template/modules/more/room-3d-modal.cshtml',
+        'model': '/template/modules/more/model-modal.cshtml'
       },
       viewItem: {
-        'nav': '/template/modules/b-here/nav-modal.cshtml',
-        'plane': '/template/modules/b-here/plane-modal.cshtml',
-        'curved-plane': '/template/modules/b-here/curved-plane-modal.cshtml',
-        'texture': '/template/modules/b-here/texture-modal.cshtml',
-        'model': '/template/modules/b-here/item-model-modal.cshtml'
+        'nav': '/template/modules/more/nav-modal.cshtml',
+        'plane': '/template/modules/more/plane-modal.cshtml',
+        'curved-plane': '/template/modules/more/curved-plane-modal.cshtml',
+        'texture': '/template/modules/more/texture-modal.cshtml',
+        'model': '/template/modules/more/item-model-modal.cshtml'
       },
-      remove: '/template/modules/b-here/remove-modal.cshtml'
+      remove: '/template/modules/more/remove-modal.cshtml'
     }
   },
   languages: ['en'],
@@ -164,8 +164,8 @@ AppComponent.meta = {
   },
   logo: null,
   background: {
-    image: '/b-here/img/background.jpg',
-    video: '/b-here/img/background.mp4'
+    image: '/more/img/background.jpg',
+    video: '/more/img/background.mp4'
   },
   colors: {
     menuBackground: '#000000',
@@ -181,9 +181,9 @@ AppComponent.meta = {
     disabledViewTypes: ['waiting-room', 'room-3d'],
     disabledViewItemTypes: ['texture']
   },
-  assets: '/b-here/',
+  assets: '/more/',
   worker: './js/workers/image.service.worker.js',
-  githubDocs: 'https://raw.githubusercontent.com/actarian/b-here/b-here-ws-new/docs/',
+  githubDocs: 'https://raw.githubusercontent.com/actarian/more/more-ws-new/docs/',
   language: '',
   market: '',
   url: {
