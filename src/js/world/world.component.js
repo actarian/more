@@ -5,12 +5,10 @@ import { Component, getContext } from 'rxcomp';
 // import { LuminosityShader } from 'three/examples/jsm/shaders/LuminosityShader.js';
 import { DEBUG } from '../environment';
 import { Rect } from '../rect/rect';
-import Camera from './camera/camera';
 import Interactive from './interactive/interactive';
 
 const ORIGIN = new THREE.Vector3();
 const USE_SHADOW = false;
-const USE_PHONE = true;
 
 export default class WorldComponent extends Component {
 
@@ -27,22 +25,6 @@ export default class WorldComponent extends Component {
 	get debugging() {
 		// return STATIC || DEBUG;
 		return DEBUG;
-	}
-	get locked() {
-		return this.state.locked || this.state.spying;
-	}
-	get lockedOrXR() {
-		return this.locked || this.renderer.xr.isPresenting;
-	}
-
-	get showPointer() {
-		return this.pointer.mesh.parent != null;
-	}
-	set showPointer(showPointer) {
-		if (this.showPointer !== showPointer) {
-			showPointer ? this.scene.add(this.pointer.mesh) : this.scene.remove(this.pointer.mesh);
-			// console.log('showPointer', showPointer);
-		}
 	}
 
 	onInit() {
@@ -72,7 +54,7 @@ export default class WorldComponent extends Component {
 		const cameraRect = this.cameraRect = new Rect();
 
 		const cameraGroup = this.cameraGroup = new THREE.Group();
-		const camera = this.camera = new Camera(70, container.offsetWidth / container.offsetHeight, 0.01, 1000);
+		const camera = this.camera = new THREE.PerspectiveCamera(70, container.offsetWidth / container.offsetHeight, 0.01, 1000);
 		camera.position.z = 2;
 		camera.lookAt(ORIGIN);
 		cameraGroup.add(camera);
@@ -177,7 +159,6 @@ export default class WorldComponent extends Component {
 				camera = this.camera;
 			const time = performance.now();
 			const tick = this.tick_ ? ++this.tick_ : this.tick_ = 1;
-			// this.raycasterXRHitTest();
 			this.scene.traverse((child) => {
 				if (typeof child.userData.render === 'function') {
 					child.userData.render(time, tick);
@@ -247,7 +228,7 @@ export default class WorldComponent extends Component {
 			}
 			const raycaster = this.updateRaycasterMouse(event);
 			const hit = Interactive.hittest(raycaster, true);
-			if (DEBUG) {
+			if (this.debugging) {
 				if (this.keys.Shift || this.keys.Control) {
 				} else {
 					if (this.panorama.mesh.intersection) {
@@ -259,21 +240,6 @@ export default class WorldComponent extends Component {
 		} catch (error) {
 			this.error = error;
 			// throw (error);
-		}
-	}
-
-	raycasterXRHitTest() {
-		if (this.renderer.xr.isPresenting) {
-			const raycaster = this.updateRaycasterXR(this.controller, this.raycaster);
-			if (raycaster) {
-				const hit = Interactive.hittest(raycaster, this.controller.userData.isSelecting);
-				this.indicator.update();
-				/*
-				if (hit && hit !== this.panorama.mesh) {
-					// controllers.feedback();
-				}
-				*/
-			}
 		}
 	}
 
@@ -305,13 +271,7 @@ export default class WorldComponent extends Component {
 		/*
 		try {
 			const deltaY = event.deltaY * (event.wheelDeltaY !== undefined ? 1 : 37);
-			const orbit = this.orbit;
-			gsap.to(orbit, {
-				duration: 0.5,
-				zoom: orbit.zoom + deltaY * 0.1,
-				ease: Power4.easeOut,
-				overwrite: true,
-			});
+			const zoom = this.zoom + deltaY * 0.1,
 		} catch (error) {
 			this.error = error;
 			// throw (error);
@@ -322,25 +282,7 @@ export default class WorldComponent extends Component {
 	onOrientationDidChange() {
 	}
 
-	onObjectDown(event) {
-
-	}
-
 	addListeners() {
-		/*
-		const orbit$ = this.orbit.observe$(this.container).pipe(
-			shareReplay(1)
-		);
-		const orientation$ = orbit$.pipe(
-			filter(event => event instanceof OrbitMoveEvent),
-			auditTime(Math.floor(1000 / 15)),
-		);
-		orientation$.pipe(
-			takeUntil(this.unsubscribe$),
-		).subscribe(event => {
-			this.onOrientationDidChange();
-		});
-		*/
 		this.resize = this.resize.bind(this);
 		this.render = this.render.bind(this);
 		this.onMouseDown = this.onMouseDown.bind(this);

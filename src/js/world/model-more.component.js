@@ -1,18 +1,17 @@
 // import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { MeshSurfaceSampler } from 'three/examples/jsm/math/MeshSurfaceSampler.js';
-import { environment } from '../../environment';
-import LoaderService from '../../loader/loader.service';
-import EmittableMesh from '../interactive/emittable.mesh';
-import FreezableMesh from '../interactive/freezable.mesh';
-import Interactive from '../interactive/interactive';
-import InteractiveMesh from '../interactive/interactive.mesh';
-import WorldComponent from '../world.component';
+import { getContext } from 'rxcomp';
+import { environment } from '../environment';
+import LoaderService from '../loader/loader.service';
+import EmittableMesh from './interactive/emittable.mesh';
+import FreezableMesh from './interactive/freezable.mesh';
+import Interactive from './interactive/interactive';
+import InteractiveMesh from './interactive/interactive.mesh';
 import ModelComponent from './model.component';
-import { ParticlePoint } from './particle';
+import { Particles } from './particles';
+import WorldComponent from './world.component';
 
+const AUTOPLAY = false;
 const SCALE = 2;
-const BULGE_DISTANCE = 0.8;
-
 const deg = (v) => v * Math.PI / 180;
 
 export default class ModelMoreComponent extends ModelComponent {
@@ -39,6 +38,11 @@ export default class ModelMoreComponent extends ModelComponent {
 		this.z = 0;
 		this.progress = null;
 		this.addListeners();
+		window.animateToIndex = (index, callback) => {
+			this.animateToIndex(index, callback);
+		};
+		const { node } = getContext(this);
+		node.classList.add('ready');
 	}
 
 	onDestroy() {
@@ -101,44 +105,6 @@ export default class ModelMoreComponent extends ModelComponent {
 		}
 	}
 
-	onClipToggle() {
-		const actions = this.actions;
-		if (actions.length === 1) {
-			const action = actions[0];
-			if (this.actionIndex === -1) {
-				this.actionIndex = 0;
-				if (action.paused || action.timeScale === 0) {
-					action.paused = false;
-				} else {
-					action.play();
-				}
-			} else if (this.actionIndex === 0) {
-				this.actionIndex = -1;
-				action.halt(0.3);
-			}
-		} else if (actions.length > 1) {
-			if (this.actionIndex > -1 && this.actionIndex < actions.length) {
-				const previousClip = actions[this.actionIndex];
-				previousClip.halt(0.3);
-			}
-			this.actionIndex++;
-			if (this.actionIndex === actions.length) {
-				this.actionIndex = -1;
-				// nothing
-			} else {
-				const action = actions[this.actionIndex];
-				// console.log(this.actionIndex, action);
-				if (action.paused) {
-					action.paused = false;
-				}
-				if (action.timeScale === 0) {
-					action.timeScale = 1;
-				}
-				action.play();
-			}
-		}
-	}
-
 	onGlbLoaded(mesh, animations, mount, dismount) {
 		// animations
 		this.parseAnimations(mesh, animations);
@@ -152,40 +118,14 @@ export default class ModelMoreComponent extends ModelComponent {
 		let dummy;
 		dummy = new THREE.Group();
 		dummy.add(mesh);
-
 		const geometry = new THREE.PlaneGeometry(2, 2, 2, 2);
 		const material = new THREE.MeshBasicMaterial({ visible: false, side: THREE.DoubleSide});
 		const plane = this.plane = new THREE.Mesh( geometry, material );
 		dummy.add(plane);
-
-		/*
-		box.setFromObject(dummy);
-		const center = box.getCenter(new THREE.Vector3());
-		const endY = 0; // dummy.position.y;
-		const from = { tween: 1 };
-		const onUpdate = () => {
-			dummy.position.y = endY + 3 * from.tween;
-			dummy.rotation.y = 0 + Math.PI * from.tween;
-		};
-		onUpdate();
-		*/
-		const particles = this.particles = this.getParticles(mesh, scale);
+		const particles = this.particles = Particles.getParticles(mesh, scale);
 		dummy.add(particles);
 		this.makeInteractive(plane);
-
 		this.makeAnimation();
-		/*
-		gsap.to(from, {
-			duration: 1.5,
-			tween: 0,
-			delay: 0.1,
-			ease: Power2.easeInOut,
-			onUpdate: onUpdate,
-			onComplete: () => {
-				console.log('complete', dummy.position.y);
-			}
-		});
-		*/
 		if (typeof mount === 'function') {
 			mount(dummy);
 		}
@@ -195,9 +135,10 @@ export default class ModelMoreComponent extends ModelComponent {
 		const animations = this.animations || (this.animations = [
 			new THREE.Vector3(-deg(70), deg(20), 0),
 			new THREE.Vector3(-deg(70), deg(-20), 0),
+			new THREE.Vector3(0, 0, 0),
 			new THREE.Vector3(-deg(70), deg(20), deg(45)),
 			new THREE.Vector3(-deg(70), deg(-20), deg(-45)),
-			new THREE.Vector3(0, 0, 0),
+			new THREE.Vector3(-deg(90), 0, 0),
 		]);
 		const animationIndex = this.animationIndex != null ? this.animationIndex : (this.animationIndex = 0);
 		const a = this.a != null ? this.a : (this.a = new THREE.Vector3());
@@ -206,29 +147,39 @@ export default class ModelMoreComponent extends ModelComponent {
 	}
 
 	animate() {
-		setTimeout(() => {
-			const a = this.a;
-			const animations = this.animations;
-			const animationIndex = (this.animationIndex + 1) % animations.length;
-			this.animationIndex = animationIndex;
-			const animation = animations[animationIndex];
-			gsap.to(a, {
-				x: animation.x,
-				y: animation.y,
-				z: animation.z,
-				duration: 1,
-				delay: 0.1,
-				ease: Power2.easeInOut,
-				onComplete: () => {
+		if (AUTOPLAY) {
+			setTimeout(() => {
+				const animations = this.animations;
+				const animationIndex = (this.animationIndex + 1) % animations.length;
+				this.animationIndex = animationIndex;
+				this.animateToIndex(animationIndex, () => {
 					this.animate();
+				});
+			}, 4000);
+		}
+	}
+
+	animateToIndex(animationIndex, complete) {
+		const a = this.a;
+		const animations = this.animations;
+		const animation = animations[animationIndex];
+		gsap.to(a, {
+			x: animation.x,
+			y: animation.y,
+			z: animation.z,
+			duration: 1,
+			delay: 0.1,
+			ease: Power2.easeInOut,
+			onComplete: () => {
+				if (typeof complete === 'function') {
+					complete();
 				}
-			});
-		}, 4000);
+			}
+		});
 	}
 
 	render(time, tick) {
 		const mesh = this.mesh;
-		const group = this.group;
 		const mixer = this.mixer;
 		const clock = this.clock;
 		const a = this.a;
@@ -243,21 +194,7 @@ export default class ModelMoreComponent extends ModelComponent {
 			mesh.scale.x = state.z;
 			mesh.scale.y = state.z;
 			mesh.scale.z = state.z;
-			// mesh.rotation.x += 0.001;
-			// mesh.rotation.y += 0.001;
-			const particles = this.particles;
-			const particlePoints = this.particlePoints;
-			if (particles && particlePoints && particlePoints.length) {
-				const intersection = this.getIntersection();
-				const intersectionPoint = intersection ? particles.worldToLocal(intersection.point) : null;
-				particlePoints.forEach(x => x.render(intersectionPoint));
-				const point = particlePoints[0];
-				const positions = point.positions;
-				const geometry = point.geometry;
-				geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-				geometry.attributes.position.needsUpdate = true;
-				// geometry.computeBoundingSphere();
-			}
+			Particles.render(this.particles, this.getIntersection());
 		}
 		if (mixer) {
 			const delta = clock.getDelta();
@@ -296,18 +233,6 @@ export default class ModelMoreComponent extends ModelComponent {
 		return overing;
 	}
 
-	static getInteractiveDescriptors() {
-		let descriptors = ModelMoreComponent.interactiveDescriptors;
-		if (!descriptors) {
-			const freezableDescriptors = Object.getOwnPropertyDescriptors(FreezableMesh.prototype);
-			const emittableDescriptors = Object.getOwnPropertyDescriptors(EmittableMesh.prototype);
-			const interactiveDescriptors = Object.getOwnPropertyDescriptors(InteractiveMesh.prototype);
-			descriptors = Object.assign({}, freezableDescriptors, emittableDescriptors, interactiveDescriptors);
-			ModelMoreComponent.interactiveDescriptors = descriptors;
-		}
-		return descriptors;
-	}
-
 	makeInteractive(mesh) {
 		const interactiveDescriptors = ModelMoreComponent.getInteractiveDescriptors();
 		mesh.traverse((child) => {
@@ -329,80 +254,14 @@ export default class ModelMoreComponent extends ModelComponent {
 				child.on('out', () => {
 					this.over = false;
 				});
+				/*
 				child.on('down', () => {
 					this.onClipToggle();
 					console.log('onDown');
 				});
+				*/
 			}
 		});
-	}
-
-	getParticles(mesh, scale) {
-		let target, targetMesh;
-		mesh.traverse((child) => {
-			if (child.isMesh) {
-				child.material = new THREE.MeshBasicMaterial({ visible: false });
-				targetMesh = child;
-				target = child.geometry;
-			}
-		});
-		const points = [];
-		const vertexCount = targetMesh.geometry.getAttribute('position').count * 3;
-		const sampler = new MeshSurfaceSampler(targetMesh)
-			.setWeightAttribute(null)
-			.build();
-		// ; 'uv';
-		const _position = new THREE.Vector3();
-		const _normal = new THREE.Vector3();
-		for (let i = 0; i < vertexCount; i++) {
-			sampler.sample(_position, _normal);
-			// _normal.add( _position );
-			const point = new ParticlePoint(_position.clone().multiplyScalar(scale), i, vertexCount);
-			points.push(point);
-			// dummy.lookAt( _normal );
-			// dummy.updateMatrix();
-		}
-		const amount = points.length;
-		const geometry = new THREE.BufferGeometry();
-		const positions = new Float32Array(amount * 3);
-		const colors = new Float32Array(amount * 3);
-		const color = new THREE.Color();
-		let n = 1, n2 = n / 2; // amount spread in the cube
-		points.forEach((p, i) => {
-			// positions
-			positions[i * 3] = p.x;
-			positions[i * 3 + 1] = p.y;
-			positions[i * 3 + 2] = p.z;
-			// colors
-			/*
-			const vx = (p.x / n) + 0.5;
-			const vy = (p.y / n) + 0.5;
-			const vz = (p.z / n) + 0.5;
-			color.setRGB(vx, vy, vz);
-			*/
-			color.setRGB(113 / 255, 64 / 255, 253 / 255);
-			colors[i * 3] = color.r;
-			colors[i * 3 + 1] = color.g;
-			colors[i * 3 + 2] = color.b;
-			// point
-			p.positions = positions;
-			p.geometry = geometry;
-		});
-		this.particlePoints = points;
-		geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-		geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-		geometry.computeBoundingSphere();
-		const texture = new THREE.CanvasTexture(this.getTexture());
-		const material = new THREE.PointsMaterial({
-			size: 0.01,
-			map: texture,
-			vertexColors: THREE.VertexColors,
-			blending: THREE.NormalBlending, // THREE.NoBlending, // THREE.AdditiveBlending, // THREE.NormalBlending, // THREE.AdditiveBlending,
-			depthTest: false,
-			transparent: true
-		});
-		const particles = new THREE.Points(geometry, material);
-		return particles;
 	}
 
 	onMove(event) {
@@ -424,26 +283,42 @@ export default class ModelMoreComponent extends ModelComponent {
 		this.mouse = mouse;
 	}
 
-	getTexture() {
-		let canvas = document.createElement('canvas');
-		canvas.width = 64;
-		canvas.height = 64;
-		let ctx = canvas.getContext('2d');
-		let gradient = ctx.createRadialGradient(
-			canvas.width / 2,
-			canvas.height / 2,
-			0,
-			canvas.width / 2,
-			canvas.height / 2,
-			canvas.width / 2
-		);
-		gradient.addColorStop(0, 'rgba(113,64,235,1)');
-		gradient.addColorStop(0.1, 'rgba(113,64,235,1)');
-		gradient.addColorStop(0.9, 'rgba(113,64,235,.05)');
-		gradient.addColorStop(1, 'rgba(0,0,0,0)');
-		ctx.fillStyle = gradient; // "#FFFFFF"; // gradient;
-		ctx.fillRect(0, 0, canvas.width, canvas.height);
-		return canvas;
+	onClipToggle() {
+		const actions = this.actions;
+		if (actions.length === 1) {
+			const action = actions[0];
+			if (this.actionIndex === -1) {
+				this.actionIndex = 0;
+				if (action.paused || action.timeScale === 0) {
+					action.paused = false;
+				} else {
+					action.play();
+				}
+			} else if (this.actionIndex === 0) {
+				this.actionIndex = -1;
+				action.halt(0.3);
+			}
+		} else if (actions.length > 1) {
+			if (this.actionIndex > -1 && this.actionIndex < actions.length) {
+				const previousClip = actions[this.actionIndex];
+				previousClip.halt(0.3);
+			}
+			this.actionIndex++;
+			if (this.actionIndex === actions.length) {
+				this.actionIndex = -1;
+				// nothing
+			} else {
+				const action = actions[this.actionIndex];
+				// console.log(this.actionIndex, action);
+				if (action.paused) {
+					action.paused = false;
+				}
+				if (action.timeScale === 0) {
+					action.timeScale = 1;
+				}
+				action.play();
+			}
+		}
 	}
 
 	addListeners() {
@@ -457,6 +332,18 @@ export default class ModelMoreComponent extends ModelComponent {
 		const target = document.querySelector('.world canvas');
 		target.removeEventListener('mousemove', this.onMove);
 		target.removeEventListener('touchmove', this.onMove);
+	}
+
+	static getInteractiveDescriptors() {
+		let descriptors = ModelMoreComponent.interactiveDescriptors;
+		if (!descriptors) {
+			const freezableDescriptors = Object.getOwnPropertyDescriptors(FreezableMesh.prototype);
+			const emittableDescriptors = Object.getOwnPropertyDescriptors(EmittableMesh.prototype);
+			const interactiveDescriptors = Object.getOwnPropertyDescriptors(InteractiveMesh.prototype);
+			descriptors = Object.assign({}, freezableDescriptors, emittableDescriptors, interactiveDescriptors);
+			ModelMoreComponent.interactiveDescriptors = descriptors;
+		}
+		return descriptors;
 	}
 
 }

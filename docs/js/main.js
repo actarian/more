@@ -379,6 +379,966 @@ console.log('environment', environment);var FlagPipe = /*#__PURE__*/function (_P
 }(rxcomp.Pipe);
 FlagPipe.meta = {
   name: 'flag'
+};var LOADER_UID = 0;
+
+var LoaderService = /*#__PURE__*/function () {
+  function LoaderService() {}
+
+  // merge(this.statusSubject, this.validatorsSubject)
+  LoaderService.switchLoaders = function switchLoaders() {
+    var _this = this;
+
+    var items = Object.keys(this.items).map(function (key) {
+      return _this.items[key];
+    });
+    var items$ = items.length ? rxjs.combineLatest(items) : rxjs.of(items);
+    this.progress$.next(items$);
+  };
+
+  LoaderService.getRef = function getRef() {
+    var ref = ++LOADER_UID;
+    this.items[ref] = new rxjs.BehaviorSubject({
+      loaded: 0,
+      total: 1
+    });
+    this.switchLoaders();
+    return ref;
+  };
+
+  LoaderService.setProgress = function setProgress(ref, loaded, total) {
+    var _this2 = this;
+
+    if (total === void 0) {
+      total = 1;
+    }
+
+    var item = this.items[ref];
+
+    if (item) {
+      item.next({
+        loaded: loaded,
+        total: total
+      });
+    }
+
+    if (loaded >= total) {
+      setTimeout(function () {
+        delete _this2.items[ref];
+
+        _this2.switchLoaders();
+      }, 300);
+    }
+
+    this.switchLoaders();
+  };
+
+  return LoaderService;
+}();
+
+_defineProperty(LoaderService, "progress", {
+  value: 0,
+  loaded: 0,
+  total: 0,
+  count: 0,
+  title: ''
+});
+
+_defineProperty(LoaderService, "items", {});
+
+_defineProperty(LoaderService, "progress$", new rxjs.ReplaySubject(1).pipe(operators.switchAll(), operators.map(function () {
+  var items = Object.keys(LoaderService.items).map(function (key) {
+    return LoaderService.items[key];
+  });
+  var progress = items.reduce(function (progress, subject, i, items) {
+    var item = subject.getValue();
+    var loaded = item.loaded || 0;
+    var total = item.total || 1;
+    var value = loaded / total;
+    progress.value += value;
+    progress.loaded += loaded;
+    progress.total += total;
+    return progress;
+  }, {
+    value: 0,
+    loaded: 0,
+    total: 0
+  });
+  progress.count = items.length;
+
+  if (items.length) {
+    progress.value /= progress.count;
+  }
+
+  progress.title = Math.round(progress.value * 100) + "%";
+  LoaderService.progress = progress;
+  return progress;
+})));var FreezableMesh = /*#__PURE__*/function (_THREE$Mesh) {
+  _inheritsLoose(FreezableMesh, _THREE$Mesh);
+
+  _createClass(FreezableMesh, [{
+    key: "freezed",
+    get: function get() {
+      return this.freezed_;
+    },
+    set: function set(freezed) {
+      // !!! cycle through freezable and not freezable
+      this.freezed_ = freezed;
+      this.children.filter(function (x) {
+        return x.__lookupGetter__('freezed');
+      }).forEach(function (x) {
+        return x.freezed = freezed;
+      });
+    }
+  }]);
+
+  function FreezableMesh(geometry, material) {
+    var _this;
+
+    geometry = geometry || new THREE.BoxBufferGeometry(5, 5, 5);
+    material = material || new THREE.MeshBasicMaterial({
+      color: 0xff00ff // opacity: 1,
+      // transparent: true,
+
+    });
+    _this = _THREE$Mesh.call(this, geometry, material) || this;
+    _this.freezed = false;
+    return _this;
+  }
+
+  var _proto = FreezableMesh.prototype;
+
+  _proto.freeze = function freeze() {
+    this.freezed = true;
+  };
+
+  _proto.unfreeze = function unfreeze() {
+    this.freezed = false;
+  };
+
+  return FreezableMesh;
+}(THREE.Mesh);var EmittableMesh = /*#__PURE__*/function (_FreezableMesh) {
+  _inheritsLoose(EmittableMesh, _FreezableMesh);
+
+  function EmittableMesh(geometry, material) {
+    var _this;
+
+    geometry = geometry || new THREE.BoxBufferGeometry(5, 5, 5);
+    material = material || new THREE.MeshBasicMaterial({
+      color: 0xff00ff // opacity: 1,
+      // transparent: true,
+
+    });
+    _this = _FreezableMesh.call(this, geometry, material) || this;
+    _this.events = {};
+    return _this;
+  }
+
+  var _proto = EmittableMesh.prototype;
+
+  _proto.on = function on(type, callback) {
+    var _this2 = this;
+
+    var event = this.events[type] = this.events[type] || [];
+    event.push(callback);
+    return function () {
+      _this2.events[type] = event.filter(function (x) {
+        return x !== callback;
+      });
+    };
+  };
+
+  _proto.off = function off(type, callback) {
+    var event = this.events[type];
+
+    if (event) {
+      this.events[type] = event.filter(function (x) {
+        return x !== callback;
+      });
+    }
+  };
+
+  _proto.emit = function emit(type, data) {
+    var event = this.events[type];
+
+    if (event) {
+      event.forEach(function (callback) {
+        // callback.call(this, data);
+        callback(data);
+      });
+    }
+
+    var broadcast = this.events.broadcast;
+
+    if (broadcast) {
+      broadcast.forEach(function (callback) {
+        callback(type, data);
+      });
+    }
+  };
+
+  return EmittableMesh;
+}(FreezableMesh);// import DebugService from '../debug.service';
+
+var Interactive = function Interactive() {};
+Interactive.items = [];
+Interactive.hittest = interactiveHittest.bind(Interactive);
+Interactive.dispose = interactiveDispose.bind(Interactive);
+function interactiveHittest(raycaster, down, event) {
+  var _this = this;
+
+  if (down === void 0) {
+    down = false;
+  }
+
+  // const debugService = DebugService.getService();
+  var dirty = false;
+
+  if (this.down !== down) {
+    this.down = down;
+    this.lock = false;
+    dirty = true;
+  }
+
+  var items = this.items.filter(function (x) {
+    return !x.freezed;
+  });
+  var intersections = raycaster.intersectObjects(items);
+  var key, hit;
+  var hash = {};
+  intersections.forEach(function (intersection, i) {
+    var object = intersection.object;
+    key = object.uuid;
+
+    if (i === 0) {
+      if (_this.lastIntersectedObject !== object || dirty) {
+        _this.lastIntersectedObject = object;
+        hit = object; // debugService.setMessage(hit.name || hit.id);
+        // haptic feedback
+      } else if (object.intersection && (Math.abs(object.intersection.point.x - intersection.point.x) > 0.01 || Math.abs(object.intersection.point.y - intersection.point.y) > 0.01)) {
+        object.intersection = intersection;
+        object.emit('move', object);
+      }
+    }
+
+    hash[key] = intersection;
+  });
+
+  if (intersections.length === 0) {
+    this.lastIntersectedObject = null;
+  }
+
+  items.forEach(function (x) {
+    x.intersection = hash[x.uuid];
+    x.over = x === _this.lastIntersectedObject || x.intersection && !x.depthTest && (!_this.lastIntersectedObject || _this.lastIntersectedObject.depthTest);
+    x.down = down && x.over && !_this.lock;
+
+    if (x.down) {
+      _this.lock = true;
+    }
+  });
+  return hit;
+}
+function interactiveDispose(object) {
+  if (object) {
+    var index = this.items.indexOf(object);
+
+    if (index !== -1) {
+      this.items.splice(index, 1);
+    }
+  }
+}var InteractiveMesh = /*#__PURE__*/function (_EmittableMesh) {
+  _inheritsLoose(InteractiveMesh, _EmittableMesh);
+
+  function InteractiveMesh(geometry, material) {
+    var _this;
+
+    _this = _EmittableMesh.call(this, geometry, material) || this;
+    _this.depthTest = true;
+    _this.over_ = false;
+    _this.down_ = false;
+    Interactive.items.push(_assertThisInitialized(_this));
+    return _this;
+  }
+
+  _createClass(InteractiveMesh, [{
+    key: "isInteractiveMesh",
+    get: function get() {
+      return true;
+    }
+  }, {
+    key: "over",
+    get: function get() {
+      return this.over_;
+    },
+    set: function set(over) {
+      if (this.over_ != over) {
+        this.over_ = over;
+        /*
+        if (over) {
+        	this.emit('hit', this);
+        }
+        */
+
+        if (over) {
+          this.emit('over', this);
+        } else {
+          this.emit('out', this);
+        }
+      }
+    }
+  }, {
+    key: "down",
+    get: function get() {
+      return this.down_;
+    },
+    set: function set(down) {
+      down = down && this.over;
+
+      if (this.down_ != down) {
+        this.down_ = down;
+
+        if (down) {
+          this.emit('down', this);
+        } else {
+          this.emit('up', this);
+        }
+      }
+    }
+  }]);
+
+  return InteractiveMesh;
+}(EmittableMesh);var Rect = /*#__PURE__*/function () {
+  function Rect(rect) {
+    this.x = 0;
+    this.y = 0;
+    this.top = 0;
+    this.right = 0;
+    this.bottom = 0;
+    this.left = 0;
+    this.width = 0;
+    this.height = 0;
+    this.set(rect);
+  }
+
+  Rect.contains = function contains(rect, left, top) {
+    return rect.top <= top && top <= rect.bottom && rect.left <= left && left <= rect.right;
+  };
+
+  Rect.intersectRect = function intersectRect(r1, r2) {
+    return !(r2.left > r1.right || r2.right < r1.left || r2.top > r1.bottom || r2.bottom < r1.top);
+  };
+
+  Rect.fromNode = function fromNode(node) {
+    if (!node) {
+      return;
+    }
+
+    var rect = node.rect_ || (node.rect_ = new Rect());
+    var rects = node.getClientRects();
+
+    if (!rects.length) {
+      // console.log(rects, node);
+      return rect;
+    }
+
+    var boundingRect = node.getBoundingClientRect(); // rect.top: boundingRect.top + defaultView.pageYOffset,
+    // rect.left: boundingRect.left + defaultView.pageXOffset,
+
+    rect.x = boundingRect.left;
+    rect.y = boundingRect.top;
+    rect.top = boundingRect.top;
+    rect.left = boundingRect.left;
+    rect.width = boundingRect.width;
+    rect.height = boundingRect.height;
+    rect.right = rect.left + rect.width;
+    rect.bottom = rect.top + rect.height;
+    rect.setCenter();
+    return rect;
+  };
+
+  var _proto = Rect.prototype;
+
+  _proto.set = function set(rect) {
+    if (rect) {
+      Object.assign(this, rect);
+      this.right = this.left + this.width;
+      this.bottom = this.top + this.height;
+    }
+
+    this.setCenter();
+  };
+
+  _proto.setSize = function setSize(w, h) {
+    this.width = w;
+    this.height = h;
+    this.right = this.left + this.width;
+    this.bottom = this.top + this.height;
+    this.setCenter(); // console.log(w, h);
+  };
+
+  _proto.setCenter = function setCenter() {
+    var center = this.center || (this.center = {});
+    center.top = this.top + this.height / 2;
+    center.left = this.left + this.width / 2;
+    center.x = center.left;
+    center.y = center.top;
+  };
+
+  _proto.contains = function contains(left, top) {
+    return Rect.contains(this, left, top);
+  };
+
+  _proto.intersect = function intersect(rect) {
+    return Rect.intersectRect(this, rect);
+  };
+
+  _proto.intersection = function intersection(rect) {
+    var intersection = this.intersection_ || (this.intersection_ = {
+      left: 0,
+      top: 0,
+      width: 0,
+      height: 0,
+      x: 0,
+      y: 0,
+      pow: {
+        x: -1,
+        y: -1
+      },
+      offset: function offset(_offset) {
+        _offset = _offset || 0;
+        var pow = (this.top - this.rect.height / 2 + _offset) / -this.height;
+        return pow;
+      },
+      scroll: function scroll(offset) {
+        offset = offset || 0;
+        var pow = (this.top - this.rect.height / 2 + offset) / -this.height;
+        return pow;
+      }
+    });
+    intersection.left = this.left;
+    intersection.top = this.top;
+    intersection.width = this.width;
+    intersection.height = this.height;
+    intersection.x = this.left + this.width / 2;
+    intersection.y = this.top + this.height / 2;
+    intersection.rect = rect;
+    var pow = intersection.offset(0);
+    intersection.pow.y = pow;
+    return intersection;
+  };
+
+  return Rect;
+}();var ORIGIN = new THREE.Vector3();
+
+var WorldComponent = /*#__PURE__*/function (_Component) {
+  _inheritsLoose(WorldComponent, _Component);
+
+  function WorldComponent() {
+    return _Component.apply(this, arguments) || this;
+  }
+
+  var _proto = WorldComponent.prototype;
+
+  _proto.onInit = function onInit() {
+    // console.log('WorldComponent.onInit');
+    this.index = 0;
+    this.error_ = null;
+    this.loading = null;
+    this.waiting = null;
+    this.createScene();
+    this.addListeners();
+    this.animate();
+  };
+
+  _proto.onDestroy = function onDestroy() {
+    this.removeListeners();
+    var renderer = this.renderer;
+    renderer.setAnimationLoop(function () {});
+  };
+
+  _proto.createScene = function createScene() {
+    var _getContext = rxcomp.getContext(this),
+        node = _getContext.node;
+
+    this.size = {
+      left: 0,
+      top: 0,
+      width: 0,
+      height: 0,
+      aspect: 0
+    };
+    this.mouse = new THREE.Vector2();
+    var container = this.container = node;
+    var worldRect = this.worldRect = Rect.fromNode(container);
+    var cameraRect = this.cameraRect = new Rect();
+    var cameraGroup = this.cameraGroup = new THREE.Group();
+    var camera = this.camera = new THREE.PerspectiveCamera(70, container.offsetWidth / container.offsetHeight, 0.01, 1000);
+    camera.position.z = 2;
+    camera.lookAt(ORIGIN);
+    cameraGroup.add(camera); // const orbit = this.orbit = new OrbitService(camera);
+
+    var renderer = this.renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      alpha: true,
+      premultipliedAlpha: true,
+      logarithmicDepthBuffer: true // physicallyCorrectLights: true,
+
+    }); // renderer.setClearColor(0x7140eb, 1);
+
+    renderer.setClearColor(0x000000, 0);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setSize(container.offsetWidth, container.offsetHeight);
+    renderer.xr.enabled = true;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 0.8;
+    renderer.outputEncoding = THREE.sRGBEncoding;
+
+    if (container.childElementCount > 1) {
+      container.insertBefore(renderer.domElement, container.children[1]);
+    } else {
+      container.appendChild(renderer.domElement);
+    }
+
+    var raycaster = this.raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(this.mouse, camera);
+    var scene = this.scene = new THREE.Scene();
+    scene.add(cameraGroup);
+    var objects = this.objects = new THREE.Group();
+    objects.name = '[objects]';
+    scene.add(objects);
+    /*
+    const mainLight = new THREE.PointLight(0xffffff);
+    mainLight.position.set(-50, 0, -50);
+    objects.add(mainLight);
+    		const light2 = new THREE.DirectionalLight(0xffe699, 5);
+    light2.position.set(5, -5, 5);
+    light2.target.position.set(0, 0, 0);
+    objects.add(light2);
+    		const light = new THREE.AmbientLight(0x101010);
+    objects.add(light);
+    */
+
+    /*
+    const composer = this.composer = new EffectComposer(renderer);
+    const renderPass = new RenderPass(scene, camera);
+    composer.addPass(renderPass);
+    const luminosityPass = new ShaderPass(LuminosityShader);
+    composer.addPass(luminosityPass);
+    */
+
+    this.resize();
+  };
+
+  _proto.raycasterHitTest = function raycasterHitTest() {
+    try {
+      if (this.renderer.xr.isPresenting) {
+        var raycaster = this.updateRaycasterXR(this.controller, this.raycaster);
+
+        if (raycaster) {
+          var hit = Interactive.hittest(raycaster, this.controller.userData.isSelecting);
+          this.indicator.update();
+        }
+      }
+    } catch (error) {
+      this.error = error; // throw (error);
+    }
+  };
+
+  _proto.repos = function repos(object, rect) {
+    var worldRect = this.worldRect;
+    var sx = 0.8; // const sx = rect.width / worldRect.width;
+    // const sy = rect.height / worldRect.height;
+
+    object.scale.set(sx, sx, sx); // const tx = ((rect.x + rect.width / 2) - worldRect.width / 2) / worldRect.width * 2.0 * this.camera.aspect; // * cameraRect.width / worldRect.width - cameraRect.width / 2;
+    // const ty = ((rect.y + rect.height / 2) - worldRect.height / 2) / worldRect.height * 2.0 * this.camera.aspect; // * cameraRect.height / worldRect.height - cameraRect.height / 2;
+
+    var tx = (rect.x + rect.width / 2 - worldRect.width / 2) / worldRect.width * 2.0 * this.camera.aspect;
+    var ty = (rect.y + rect.height / 2 - worldRect.height / 2) / worldRect.height * 2.0 * this.camera.aspect; // console.log(tx);
+    // const position = new THREE.Vector3(tx, ty, 0).unproject(this.camera);
+
+    object.position.set(tx, -ty, 0); // console.log(tx, -ty, 0);
+  };
+
+  _proto.render = function render(delta) {
+    try {
+      var renderer = this.renderer,
+          scene = this.scene,
+          camera = this.camera;
+      var time = performance.now();
+      var tick = this.tick_ ? ++this.tick_ : this.tick_ = 1;
+      this.scene.traverse(function (child) {
+        if (typeof child.userData.render === 'function') {
+          child.userData.render(time, tick);
+        }
+      });
+      renderer.render(this.scene, this.camera);
+      /*
+      const composer = this.composer;
+      composer.render();
+      */
+      // this.orbit.render();
+    } catch (error) {
+      this.error = error; // throw (error);
+    }
+  };
+
+  _proto.animate = function animate() {
+    var renderer = this.renderer;
+    renderer.setAnimationLoop(this.render);
+  };
+
+  _proto.resize = function resize() {
+    try {
+      var container = this.container,
+          renderer = this.renderer,
+          camera = this.camera;
+      var size = this.size;
+      var rect = container.getBoundingClientRect();
+      size.left = Math.floor(rect.left);
+      size.top = Math.floor(rect.top);
+      size.width = Math.ceil(rect.width);
+      size.height = Math.ceil(rect.height);
+      size.aspect = size.width / size.height;
+      var worldRect = this.worldRect;
+      worldRect.setSize(size.width, size.height);
+      renderer.setSize(size.width, size.height);
+
+      if (camera) {
+        camera.aspect = size.width / size.height;
+        var angle = camera.fov * Math.PI / 180;
+        var height = Math.abs(camera.position.z * Math.tan(angle / 2) * 2);
+        var cameraRect = this.cameraRect;
+        cameraRect.width = height * camera.aspect;
+        cameraRect.height = height;
+        camera.updateProjectionMatrix();
+      }
+    } catch (error) {
+      this.error = error; // throw (error);
+    }
+  };
+
+  _proto.updateRaycasterMouse = function updateRaycasterMouse(event) {
+    var w2 = this.size.width / 2;
+    var h2 = this.size.height / 2;
+    this.mouse.x = (event.clientX - this.size.left - w2) / w2;
+    this.mouse.y = -(event.clientY - this.size.top - h2) / h2;
+    var raycaster = this.raycaster;
+    raycaster.setFromCamera(this.mouse, this.camera);
+    return raycaster;
+  };
+
+  _proto.onMouseDown = function onMouseDown(event) {
+    try {
+      if (event.button !== 0) {
+        return;
+      }
+
+      var raycaster = this.updateRaycasterMouse(event);
+      var hit = Interactive.hittest(raycaster, true);
+
+      if (this.debugging) {
+        if (this.keys.Shift || this.keys.Control) {} else {
+          if (this.panorama.mesh.intersection) {
+            var position = new THREE.Vector3().copy(this.panorama.mesh.intersection.point).normalize();
+            console.log(JSON.stringify({
+              position: position.toArray()
+            }));
+          }
+        }
+      }
+    } catch (error) {
+      this.error = error; // throw (error);
+    }
+  };
+
+  _proto.raycasterDesktopHitTest = function raycasterDesktopHitTest(event) {
+    var raycaster = this.updateRaycasterMouse(event);
+    var hit = Interactive.hittest(raycaster);
+  };
+
+  _proto.onMouseMove = function onMouseMove(event) {
+    try {
+      this.raycasterDesktopHitTest(event);
+    } catch (error) {
+      this.error = error; // throw (error);
+    }
+  };
+
+  _proto.onMouseUp = function onMouseUp(event) {
+    try {
+      var raycaster = this.updateRaycasterMouse(event);
+      var hit = Interactive.hittest(raycaster, false);
+    } catch (error) {
+      this.error = error; // throw (error);
+    }
+  };
+
+  _proto.onMouseWheel = function onMouseWheel(event) {
+    /*
+    try {
+    	const deltaY = event.deltaY * (event.wheelDeltaY !== undefined ? 1 : 37);
+    	const zoom = this.zoom + deltaY * 0.1,
+    } catch (error) {
+    	this.error = error;
+    	// throw (error);
+    }
+    */
+  };
+
+  _proto.onOrientationDidChange = function onOrientationDidChange() {};
+
+  _proto.addListeners = function addListeners() {
+    this.resize = this.resize.bind(this);
+    this.render = this.render.bind(this);
+    this.onMouseDown = this.onMouseDown.bind(this);
+    this.onMouseMove = this.onMouseMove.bind(this);
+    this.onMouseUp = this.onMouseUp.bind(this);
+    this.onMouseWheel = this.onMouseWheel.bind(this);
+    window.addEventListener('resize', this.resize, false);
+    this.container.addEventListener('wheel', this.onMouseWheel, false);
+    this.container.addEventListener('mousedown', this.onMouseDown, false);
+    this.container.addEventListener('mouseup', this.onMouseUp, false);
+    document.addEventListener('mousemove', this.onMouseMove, false);
+  };
+
+  _proto.removeListeners = function removeListeners() {
+    window.removeEventListener('resize', this.resize, false);
+    window.removeEventListener('resize', this.resize, false);
+    document.removeEventListener('mousemove', this.onMouseMove, false);
+    document.removeEventListener('wheel', this.onMouseWheel, false);
+    this.container.removeEventListener('mousedown', this.onMouseDown, false);
+    this.container.removeEventListener('mouseup', this.onMouseUp, false);
+  };
+
+  _createClass(WorldComponent, [{
+    key: "error",
+    get: function get() {
+      return this.error_;
+    },
+    set: function set(error) {
+      if (this.error_ !== error) {
+        this.error_ = error;
+        this.pushChanges();
+      }
+    }
+  }, {
+    key: "debugging",
+    get: function get() {
+      // return STATIC || DEBUG;
+      return DEBUG;
+    }
+  }]);
+
+  return WorldComponent;
+}(rxcomp.Component);
+WorldComponent.meta = {
+  selector: '[world]'
+};var deg = THREE.Math.degToRad;
+var GEOMETRY = new THREE.BoxBufferGeometry(1, 1, 1); // const GEOMETRY = new THREE.IcosahedronBufferGeometry(0.5, 1);
+
+var ModelComponent = /*#__PURE__*/function (_Component) {
+  _inheritsLoose(ModelComponent, _Component);
+
+  function ModelComponent() {
+    return _Component.apply(this, arguments) || this;
+  }
+
+  var _proto = ModelComponent.prototype;
+
+  _proto.onInit = function onInit() {
+    var _this = this;
+
+    // console.log('ModelComponent.onInit');
+    // console.log('item', this.item, 'host', this.host);
+    if (!this.host) {
+      throw 'ModelComponent host is undefined';
+    }
+
+    this.scale = new THREE.Vector3(1.0, 1.0, 1.0);
+    this.position = new THREE.Vector3();
+    var group = this.group = new THREE.Group();
+    group.name = this.getName();
+
+    group.userData.render = function (time, tick) {
+      // if (this.intersection) {
+      _this.render(_this, time, tick); // }
+
+    };
+
+    this.getContainer().add(group);
+    this.onCreate(function (mesh, item) {
+      return _this.onMount(mesh, item);
+    }, function (mesh, item) {
+      return _this.onDismount(mesh, item);
+    });
+  };
+
+  _proto.onDestroy = function onDestroy() {
+    var group = this.group;
+    this.getContainer().remove(group);
+    delete group.userData.render;
+    this.disposeObject(group);
+    this.group = null;
+  };
+
+  _proto.getContainer = function getContainer() {
+    return this.host.objects;
+  };
+
+  _proto.getName = function getName(name) {
+    return this.constructor.meta.selector + "-" + this.rxcompId + (name ? "-" + name : '');
+  };
+
+  _proto.onCreate = function onCreate(mounth, dismount) {
+    var material = new THREE.MeshStandardMaterial({
+      color: new THREE.Color('#ffcc00'),
+      roughness: 0.4,
+      metalness: 0.01,
+      flatShading: true,
+      transparent: true,
+      opacity: 0.9
+    });
+    var mesh = new THREE.Mesh(GEOMETRY, material);
+
+    if (typeof mounth === 'function') {
+      mounth(mesh);
+    }
+
+    return mesh;
+  };
+
+  _proto.onMount = function onMount(mesh, item) {
+    var _this2 = this;
+
+    if (this.mesh) {
+      // console.log('ModelComponent.dismount.mesh');
+      this.onDismount(this.mesh);
+    }
+
+    mesh.name = this.getName('mesh');
+    this.mesh = mesh;
+
+    if (item) {
+      item.mesh = mesh;
+
+      item.onUpdate = function () {
+        _this2.onUpdate(item, mesh);
+      };
+
+      item.onUpdateAsset = function () {
+        _this2.onUpdateAsset(item, mesh);
+      };
+    }
+
+    this.group.add(mesh); // this.host.render(); !!!
+
+    /*
+    const node = this.node;
+    DomService.scrollIntersection$(node).subscribe(event => {
+    	this.scroll = event.scroll;
+    	this.intersection = event.intersection;
+    	this.calculateScaleAndPosition();
+    });
+    */
+    // console.log('Model.loaded', mesh);
+  };
+
+  _proto.onDismount = function onDismount(mesh, item) {
+    this.group.remove(mesh);
+
+    if (typeof mesh.dispose === 'function') {
+      mesh.dispose();
+    }
+
+    this.disposeObject(mesh);
+    this.mesh = null;
+
+    if (item) {
+      delete item.mesh;
+      delete item.onUpdate;
+      delete item.onUpdateAsset;
+    }
+  };
+
+  _proto.disposeObject = function disposeObject(object) {
+    object.traverse(function (child) {
+      if (child.isInteractiveMesh || child.isInteractiveSprite) {
+        Interactive.dispose(child);
+      }
+
+      if (child.isMesh) {
+        if (child.material.map && child.material.map.disposable !== false) {
+          child.material.map.dispose();
+        }
+
+        child.material.dispose();
+        child.geometry.dispose();
+      } else if (child.isSprite) {
+        if (child.material.map && child.material.map.disposable !== false) {
+          child.material.map.dispose();
+        }
+
+        child.material.dispose();
+      }
+    }); // console.log('ModelComponent.disposeObject', object);
+  };
+
+  _proto.calculateScaleAndPosition = function calculateScaleAndPosition() {
+    var _getContext = rxcomp.getContext(this),
+        node = _getContext.node;
+
+    this.host.repos(this, node.getBoundingClientRect());
+  };
+
+  _proto.render = function render(time, tick) {
+    /*
+    this.calculateScaleAndPosition();
+    const group = this.group;
+    const scale = this.scale;
+    // group.scale.set(scale.x, scale.y, scale.z);
+    const position = this.position;
+    group.position.set(position.x, 0, 0);
+    // const tween = this.tween();
+    // group.rotation.x = deg(180) * tween;
+    // group.rotation.y = deg(360) * tween;
+    */
+  };
+
+  _proto.getScroll = function getScroll(offset) {
+    var scroll = this.intersection.scroll(offset); // console.log(scroll);
+
+    return scroll;
+  };
+
+  _proto.getTween = function getTween(offset) {
+    var tween = Math.min(0.0, this.intersection.offset(offset)) + 1;
+    tween = Math.max(0.0, tween); // tween = Ease.Sine.InOut(tween);
+
+    tween -= 1;
+    return tween;
+  } // called by UpdateViewItemComponent
+  ;
+
+  _proto.onUpdate = function onUpdate(item, mesh) {} // called by UpdateViewItemComponent
+  ;
+
+  _proto.onUpdateAsset = function onUpdateAsset(item, mesh) {};
+
+  _createClass(ModelComponent, [{
+    key: "renderOrder",
+    set: function set(renderOrder) {
+      this.group.renderOrder = renderOrder;
+    }
+  }]);
+
+  return ModelComponent;
+}(rxcomp.Component);
+ModelComponent.meta = {
+  selector: '[model]',
+  hosts: {
+    host: WorldComponent
+  },
+  inputs: ['item']
 };// threejs.org/license
 const REVISION = '126';
 const CullFaceNone = 0;
@@ -33126,1058 +34086,7 @@ var MeshSurfaceSampler = ( function () {
 
 	return MeshSurfaceSampler;
 
-} )();var LOADER_UID = 0;
-
-var LoaderService = /*#__PURE__*/function () {
-  function LoaderService() {}
-
-  // merge(this.statusSubject, this.validatorsSubject)
-  LoaderService.switchLoaders = function switchLoaders() {
-    var _this = this;
-
-    var items = Object.keys(this.items).map(function (key) {
-      return _this.items[key];
-    });
-    var items$ = items.length ? rxjs.combineLatest(items) : rxjs.of(items);
-    this.progress$.next(items$);
-  };
-
-  LoaderService.getRef = function getRef() {
-    var ref = ++LOADER_UID;
-    this.items[ref] = new rxjs.BehaviorSubject({
-      loaded: 0,
-      total: 1
-    });
-    this.switchLoaders();
-    return ref;
-  };
-
-  LoaderService.setProgress = function setProgress(ref, loaded, total) {
-    var _this2 = this;
-
-    if (total === void 0) {
-      total = 1;
-    }
-
-    var item = this.items[ref];
-
-    if (item) {
-      item.next({
-        loaded: loaded,
-        total: total
-      });
-    }
-
-    if (loaded >= total) {
-      setTimeout(function () {
-        delete _this2.items[ref];
-
-        _this2.switchLoaders();
-      }, 300);
-    }
-
-    this.switchLoaders();
-  };
-
-  return LoaderService;
-}();
-
-_defineProperty(LoaderService, "progress", {
-  value: 0,
-  loaded: 0,
-  total: 0,
-  count: 0,
-  title: ''
-});
-
-_defineProperty(LoaderService, "items", {});
-
-_defineProperty(LoaderService, "progress$", new rxjs.ReplaySubject(1).pipe(operators.switchAll(), operators.map(function () {
-  var items = Object.keys(LoaderService.items).map(function (key) {
-    return LoaderService.items[key];
-  });
-  var progress = items.reduce(function (progress, subject, i, items) {
-    var item = subject.getValue();
-    var loaded = item.loaded || 0;
-    var total = item.total || 1;
-    var value = loaded / total;
-    progress.value += value;
-    progress.loaded += loaded;
-    progress.total += total;
-    return progress;
-  }, {
-    value: 0,
-    loaded: 0,
-    total: 0
-  });
-  progress.count = items.length;
-
-  if (items.length) {
-    progress.value /= progress.count;
-  }
-
-  progress.title = Math.round(progress.value * 100) + "%";
-  LoaderService.progress = progress;
-  return progress;
-})));var FreezableMesh = /*#__PURE__*/function (_THREE$Mesh) {
-  _inheritsLoose(FreezableMesh, _THREE$Mesh);
-
-  _createClass(FreezableMesh, [{
-    key: "freezed",
-    get: function get() {
-      return this.freezed_;
-    },
-    set: function set(freezed) {
-      // !!! cycle through freezable and not freezable
-      this.freezed_ = freezed;
-      this.children.filter(function (x) {
-        return x.__lookupGetter__('freezed');
-      }).forEach(function (x) {
-        return x.freezed = freezed;
-      });
-    }
-  }]);
-
-  function FreezableMesh(geometry, material) {
-    var _this;
-
-    geometry = geometry || new THREE.BoxBufferGeometry(5, 5, 5);
-    material = material || new THREE.MeshBasicMaterial({
-      color: 0xff00ff // opacity: 1,
-      // transparent: true,
-
-    });
-    _this = _THREE$Mesh.call(this, geometry, material) || this;
-    _this.freezed = false;
-    return _this;
-  }
-
-  var _proto = FreezableMesh.prototype;
-
-  _proto.freeze = function freeze() {
-    this.freezed = true;
-  };
-
-  _proto.unfreeze = function unfreeze() {
-    this.freezed = false;
-  };
-
-  return FreezableMesh;
-}(THREE.Mesh);var EmittableMesh = /*#__PURE__*/function (_FreezableMesh) {
-  _inheritsLoose(EmittableMesh, _FreezableMesh);
-
-  function EmittableMesh(geometry, material) {
-    var _this;
-
-    geometry = geometry || new THREE.BoxBufferGeometry(5, 5, 5);
-    material = material || new THREE.MeshBasicMaterial({
-      color: 0xff00ff // opacity: 1,
-      // transparent: true,
-
-    });
-    _this = _FreezableMesh.call(this, geometry, material) || this;
-    _this.events = {};
-    return _this;
-  }
-
-  var _proto = EmittableMesh.prototype;
-
-  _proto.on = function on(type, callback) {
-    var _this2 = this;
-
-    var event = this.events[type] = this.events[type] || [];
-    event.push(callback);
-    return function () {
-      _this2.events[type] = event.filter(function (x) {
-        return x !== callback;
-      });
-    };
-  };
-
-  _proto.off = function off(type, callback) {
-    var event = this.events[type];
-
-    if (event) {
-      this.events[type] = event.filter(function (x) {
-        return x !== callback;
-      });
-    }
-  };
-
-  _proto.emit = function emit(type, data) {
-    var event = this.events[type];
-
-    if (event) {
-      event.forEach(function (callback) {
-        // callback.call(this, data);
-        callback(data);
-      });
-    }
-
-    var broadcast = this.events.broadcast;
-
-    if (broadcast) {
-      broadcast.forEach(function (callback) {
-        callback(type, data);
-      });
-    }
-  };
-
-  return EmittableMesh;
-}(FreezableMesh);// import DebugService from '../debug.service';
-
-var Interactive = function Interactive() {};
-Interactive.items = [];
-Interactive.hittest = interactiveHittest.bind(Interactive);
-Interactive.dispose = interactiveDispose.bind(Interactive);
-function interactiveHittest(raycaster, down, event) {
-  var _this = this;
-
-  if (down === void 0) {
-    down = false;
-  }
-
-  // const debugService = DebugService.getService();
-  var dirty = false;
-
-  if (this.down !== down) {
-    this.down = down;
-    this.lock = false;
-    dirty = true;
-  }
-
-  var items = this.items.filter(function (x) {
-    return !x.freezed;
-  });
-  var intersections = raycaster.intersectObjects(items);
-  var key, hit;
-  var hash = {};
-  intersections.forEach(function (intersection, i) {
-    var object = intersection.object;
-    key = object.uuid;
-
-    if (i === 0) {
-      if (_this.lastIntersectedObject !== object || dirty) {
-        _this.lastIntersectedObject = object;
-        hit = object; // debugService.setMessage(hit.name || hit.id);
-        // haptic feedback
-      } else if (object.intersection && (Math.abs(object.intersection.point.x - intersection.point.x) > 0.01 || Math.abs(object.intersection.point.y - intersection.point.y) > 0.01)) {
-        object.intersection = intersection;
-        object.emit('move', object);
-      }
-    }
-
-    hash[key] = intersection;
-  });
-
-  if (intersections.length === 0) {
-    this.lastIntersectedObject = null;
-  }
-
-  items.forEach(function (x) {
-    x.intersection = hash[x.uuid];
-    x.over = x === _this.lastIntersectedObject || x.intersection && !x.depthTest && (!_this.lastIntersectedObject || _this.lastIntersectedObject.depthTest);
-    x.down = down && x.over && !_this.lock;
-
-    if (x.down) {
-      _this.lock = true;
-    }
-  });
-  return hit;
-}
-function interactiveDispose(object) {
-  if (object) {
-    var index = this.items.indexOf(object);
-
-    if (index !== -1) {
-      this.items.splice(index, 1);
-    }
-  }
-}var InteractiveMesh = /*#__PURE__*/function (_EmittableMesh) {
-  _inheritsLoose(InteractiveMesh, _EmittableMesh);
-
-  function InteractiveMesh(geometry, material) {
-    var _this;
-
-    _this = _EmittableMesh.call(this, geometry, material) || this;
-    _this.depthTest = true;
-    _this.over_ = false;
-    _this.down_ = false;
-    Interactive.items.push(_assertThisInitialized(_this));
-    return _this;
-  }
-
-  _createClass(InteractiveMesh, [{
-    key: "isInteractiveMesh",
-    get: function get() {
-      return true;
-    }
-  }, {
-    key: "over",
-    get: function get() {
-      return this.over_;
-    },
-    set: function set(over) {
-      if (this.over_ != over) {
-        this.over_ = over;
-        /*
-        if (over) {
-        	this.emit('hit', this);
-        }
-        */
-
-        if (over) {
-          this.emit('over', this);
-        } else {
-          this.emit('out', this);
-        }
-      }
-    }
-  }, {
-    key: "down",
-    get: function get() {
-      return this.down_;
-    },
-    set: function set(down) {
-      down = down && this.over;
-
-      if (this.down_ != down) {
-        this.down_ = down;
-
-        if (down) {
-          this.emit('down', this);
-        } else {
-          this.emit('up', this);
-        }
-      }
-    }
-  }]);
-
-  return InteractiveMesh;
-}(EmittableMesh);var Rect = /*#__PURE__*/function () {
-  function Rect(rect) {
-    this.x = 0;
-    this.y = 0;
-    this.top = 0;
-    this.right = 0;
-    this.bottom = 0;
-    this.left = 0;
-    this.width = 0;
-    this.height = 0;
-    this.set(rect);
-  }
-
-  Rect.contains = function contains(rect, left, top) {
-    return rect.top <= top && top <= rect.bottom && rect.left <= left && left <= rect.right;
-  };
-
-  Rect.intersectRect = function intersectRect(r1, r2) {
-    return !(r2.left > r1.right || r2.right < r1.left || r2.top > r1.bottom || r2.bottom < r1.top);
-  };
-
-  Rect.fromNode = function fromNode(node) {
-    if (!node) {
-      return;
-    }
-
-    var rect = node.rect_ || (node.rect_ = new Rect());
-    var rects = node.getClientRects();
-
-    if (!rects.length) {
-      // console.log(rects, node);
-      return rect;
-    }
-
-    var boundingRect = node.getBoundingClientRect(); // rect.top: boundingRect.top + defaultView.pageYOffset,
-    // rect.left: boundingRect.left + defaultView.pageXOffset,
-
-    rect.x = boundingRect.left;
-    rect.y = boundingRect.top;
-    rect.top = boundingRect.top;
-    rect.left = boundingRect.left;
-    rect.width = boundingRect.width;
-    rect.height = boundingRect.height;
-    rect.right = rect.left + rect.width;
-    rect.bottom = rect.top + rect.height;
-    rect.setCenter();
-    return rect;
-  };
-
-  var _proto = Rect.prototype;
-
-  _proto.set = function set(rect) {
-    if (rect) {
-      Object.assign(this, rect);
-      this.right = this.left + this.width;
-      this.bottom = this.top + this.height;
-    }
-
-    this.setCenter();
-  };
-
-  _proto.setSize = function setSize(w, h) {
-    this.width = w;
-    this.height = h;
-    this.right = this.left + this.width;
-    this.bottom = this.top + this.height;
-    this.setCenter(); // console.log(w, h);
-  };
-
-  _proto.setCenter = function setCenter() {
-    var center = this.center || (this.center = {});
-    center.top = this.top + this.height / 2;
-    center.left = this.left + this.width / 2;
-    center.x = center.left;
-    center.y = center.top;
-  };
-
-  _proto.contains = function contains(left, top) {
-    return Rect.contains(this, left, top);
-  };
-
-  _proto.intersect = function intersect(rect) {
-    return Rect.intersectRect(this, rect);
-  };
-
-  _proto.intersection = function intersection(rect) {
-    var intersection = this.intersection_ || (this.intersection_ = {
-      left: 0,
-      top: 0,
-      width: 0,
-      height: 0,
-      x: 0,
-      y: 0,
-      pow: {
-        x: -1,
-        y: -1
-      },
-      offset: function offset(_offset) {
-        _offset = _offset || 0;
-        var pow = (this.top - this.rect.height / 2 + _offset) / -this.height;
-        return pow;
-      },
-      scroll: function scroll(offset) {
-        offset = offset || 0;
-        var pow = (this.top - this.rect.height / 2 + offset) / -this.height;
-        return pow;
-      }
-    });
-    intersection.left = this.left;
-    intersection.top = this.top;
-    intersection.width = this.width;
-    intersection.height = this.height;
-    intersection.x = this.left + this.width / 2;
-    intersection.y = this.top + this.height / 2;
-    intersection.rect = rect;
-    var pow = intersection.offset(0);
-    intersection.pow.y = pow;
-    return intersection;
-  };
-
-  return Rect;
-}();var Camera$1 = /*#__PURE__*/function (_THREE$PerspectiveCam) {
-  _inheritsLoose(Camera, _THREE$PerspectiveCam);
-
-  function Camera(fov, aspect, near, far, dolly) {
-    var _this;
-
-    if (fov === void 0) {
-      fov = 70;
-    }
-
-    if (aspect === void 0) {
-      aspect = 1;
-    }
-
-    if (near === void 0) {
-      near = 0.01;
-    }
-
-    if (far === void 0) {
-      far = 1000;
-    }
-
-    _this = _THREE$PerspectiveCam.call(this, fov, aspect, near, far) || this;
-    _this.target = new THREE.Vector3();
-    _this.box = new THREE.Group();
-
-    _this.add(_this.box);
-
-    return _this;
-  }
-
-  return Camera;
-}(THREE.PerspectiveCamera);var ORIGIN = new THREE.Vector3();
-
-var WorldComponent = /*#__PURE__*/function (_Component) {
-  _inheritsLoose(WorldComponent, _Component);
-
-  function WorldComponent() {
-    return _Component.apply(this, arguments) || this;
-  }
-
-  var _proto = WorldComponent.prototype;
-
-  _proto.onInit = function onInit() {
-    // console.log('WorldComponent.onInit');
-    this.index = 0;
-    this.error_ = null;
-    this.loading = null;
-    this.waiting = null;
-    this.createScene();
-    this.addListeners();
-    this.animate();
-  };
-
-  _proto.onDestroy = function onDestroy() {
-    this.removeListeners();
-    var renderer = this.renderer;
-    renderer.setAnimationLoop(function () {});
-  };
-
-  _proto.createScene = function createScene() {
-    var _getContext = rxcomp.getContext(this),
-        node = _getContext.node;
-
-    this.size = {
-      left: 0,
-      top: 0,
-      width: 0,
-      height: 0,
-      aspect: 0
-    };
-    this.mouse = new THREE.Vector2();
-    var container = this.container = node;
-    var worldRect = this.worldRect = Rect.fromNode(container);
-    var cameraRect = this.cameraRect = new Rect();
-    var cameraGroup = this.cameraGroup = new THREE.Group();
-    var camera = this.camera = new Camera$1(70, container.offsetWidth / container.offsetHeight, 0.01, 1000);
-    camera.position.z = 2;
-    camera.lookAt(ORIGIN);
-    cameraGroup.add(camera); // const orbit = this.orbit = new OrbitService(camera);
-
-    var renderer = this.renderer = new THREE.WebGLRenderer({
-      antialias: true,
-      alpha: true,
-      premultipliedAlpha: true,
-      logarithmicDepthBuffer: true // physicallyCorrectLights: true,
-
-    }); // renderer.setClearColor(0x7140eb, 1);
-
-    renderer.setClearColor(0x000000, 0);
-    renderer.setPixelRatio(window.devicePixelRatio);
-    renderer.setSize(container.offsetWidth, container.offsetHeight);
-    renderer.xr.enabled = true;
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 0.8;
-    renderer.outputEncoding = THREE.sRGBEncoding;
-
-    if (container.childElementCount > 1) {
-      container.insertBefore(renderer.domElement, container.children[1]);
-    } else {
-      container.appendChild(renderer.domElement);
-    }
-
-    var raycaster = this.raycaster = new THREE.Raycaster();
-    raycaster.setFromCamera(this.mouse, camera);
-    var scene = this.scene = new THREE.Scene();
-    scene.add(cameraGroup);
-    var objects = this.objects = new THREE.Group();
-    objects.name = '[objects]';
-    scene.add(objects);
-    /*
-    const mainLight = new THREE.PointLight(0xffffff);
-    mainLight.position.set(-50, 0, -50);
-    objects.add(mainLight);
-    		const light2 = new THREE.DirectionalLight(0xffe699, 5);
-    light2.position.set(5, -5, 5);
-    light2.target.position.set(0, 0, 0);
-    objects.add(light2);
-    		const light = new THREE.AmbientLight(0x101010);
-    objects.add(light);
-    */
-
-    /*
-    const composer = this.composer = new EffectComposer(renderer);
-    const renderPass = new RenderPass(scene, camera);
-    composer.addPass(renderPass);
-    const luminosityPass = new ShaderPass(LuminosityShader);
-    composer.addPass(luminosityPass);
-    */
-
-    this.resize();
-  };
-
-  _proto.raycasterHitTest = function raycasterHitTest() {
-    try {
-      if (this.renderer.xr.isPresenting) {
-        var raycaster = this.updateRaycasterXR(this.controller, this.raycaster);
-
-        if (raycaster) {
-          var hit = Interactive.hittest(raycaster, this.controller.userData.isSelecting);
-          this.indicator.update();
-        }
-      }
-    } catch (error) {
-      this.error = error; // throw (error);
-    }
-  };
-
-  _proto.repos = function repos(object, rect) {
-    var worldRect = this.worldRect;
-    var sx = 0.8; // const sx = rect.width / worldRect.width;
-    // const sy = rect.height / worldRect.height;
-
-    object.scale.set(sx, sx, sx); // const tx = ((rect.x + rect.width / 2) - worldRect.width / 2) / worldRect.width * 2.0 * this.camera.aspect; // * cameraRect.width / worldRect.width - cameraRect.width / 2;
-    // const ty = ((rect.y + rect.height / 2) - worldRect.height / 2) / worldRect.height * 2.0 * this.camera.aspect; // * cameraRect.height / worldRect.height - cameraRect.height / 2;
-
-    var tx = (rect.x + rect.width / 2 - worldRect.width / 2) / worldRect.width * 2.0 * this.camera.aspect;
-    var ty = (rect.y + rect.height / 2 - worldRect.height / 2) / worldRect.height * 2.0 * this.camera.aspect; // console.log(tx);
-    // const position = new THREE.Vector3(tx, ty, 0).unproject(this.camera);
-
-    object.position.set(tx, -ty, 0); // console.log(tx, -ty, 0);
-  };
-
-  _proto.render = function render(delta) {
-    try {
-      var renderer = this.renderer,
-          scene = this.scene,
-          camera = this.camera;
-      var time = performance.now();
-      var tick = this.tick_ ? ++this.tick_ : this.tick_ = 1; // this.raycasterXRHitTest();
-
-      this.scene.traverse(function (child) {
-        if (typeof child.userData.render === 'function') {
-          child.userData.render(time, tick);
-        }
-      });
-      renderer.render(this.scene, this.camera);
-      /*
-      const composer = this.composer;
-      composer.render();
-      */
-      // this.orbit.render();
-    } catch (error) {
-      this.error = error; // throw (error);
-    }
-  };
-
-  _proto.animate = function animate() {
-    var renderer = this.renderer;
-    renderer.setAnimationLoop(this.render);
-  };
-
-  _proto.resize = function resize() {
-    try {
-      var container = this.container,
-          renderer = this.renderer,
-          camera = this.camera;
-      var size = this.size;
-      var rect = container.getBoundingClientRect();
-      size.left = Math.floor(rect.left);
-      size.top = Math.floor(rect.top);
-      size.width = Math.ceil(rect.width);
-      size.height = Math.ceil(rect.height);
-      size.aspect = size.width / size.height;
-      var worldRect = this.worldRect;
-      worldRect.setSize(size.width, size.height);
-      renderer.setSize(size.width, size.height);
-
-      if (camera) {
-        camera.aspect = size.width / size.height;
-        var angle = camera.fov * Math.PI / 180;
-        var height = Math.abs(camera.position.z * Math.tan(angle / 2) * 2);
-        var cameraRect = this.cameraRect;
-        cameraRect.width = height * camera.aspect;
-        cameraRect.height = height;
-        camera.updateProjectionMatrix();
-      }
-    } catch (error) {
-      this.error = error; // throw (error);
-    }
-  };
-
-  _proto.updateRaycasterMouse = function updateRaycasterMouse(event) {
-    var w2 = this.size.width / 2;
-    var h2 = this.size.height / 2;
-    this.mouse.x = (event.clientX - this.size.left - w2) / w2;
-    this.mouse.y = -(event.clientY - this.size.top - h2) / h2;
-    var raycaster = this.raycaster;
-    raycaster.setFromCamera(this.mouse, this.camera);
-    return raycaster;
-  };
-
-  _proto.onMouseDown = function onMouseDown(event) {
-    try {
-      if (event.button !== 0) {
-        return;
-      }
-
-      var raycaster = this.updateRaycasterMouse(event);
-      var hit = Interactive.hittest(raycaster, true);
-
-      if (DEBUG) {
-        if (this.keys.Shift || this.keys.Control) {} else {
-          if (this.panorama.mesh.intersection) {
-            var position = new THREE.Vector3().copy(this.panorama.mesh.intersection.point).normalize();
-            console.log(JSON.stringify({
-              position: position.toArray()
-            }));
-          }
-        }
-      }
-    } catch (error) {
-      this.error = error; // throw (error);
-    }
-  };
-
-  _proto.raycasterXRHitTest = function raycasterXRHitTest() {
-    if (this.renderer.xr.isPresenting) {
-      var raycaster = this.updateRaycasterXR(this.controller, this.raycaster);
-
-      if (raycaster) {
-        var hit = Interactive.hittest(raycaster, this.controller.userData.isSelecting);
-        this.indicator.update();
-        /*
-        if (hit && hit !== this.panorama.mesh) {
-        	// controllers.feedback();
-        }
-        */
-      }
-    }
-  };
-
-  _proto.raycasterDesktopHitTest = function raycasterDesktopHitTest(event) {
-    var raycaster = this.updateRaycasterMouse(event);
-    var hit = Interactive.hittest(raycaster);
-  };
-
-  _proto.onMouseMove = function onMouseMove(event) {
-    try {
-      this.raycasterDesktopHitTest(event);
-    } catch (error) {
-      this.error = error; // throw (error);
-    }
-  };
-
-  _proto.onMouseUp = function onMouseUp(event) {
-    try {
-      var raycaster = this.updateRaycasterMouse(event);
-      var hit = Interactive.hittest(raycaster, false);
-    } catch (error) {
-      this.error = error; // throw (error);
-    }
-  };
-
-  _proto.onMouseWheel = function onMouseWheel(event) {
-    /*
-    try {
-    	const deltaY = event.deltaY * (event.wheelDeltaY !== undefined ? 1 : 37);
-    	const orbit = this.orbit;
-    	gsap.to(orbit, {
-    		duration: 0.5,
-    		zoom: orbit.zoom + deltaY * 0.1,
-    		ease: Power4.easeOut,
-    		overwrite: true,
-    	});
-    } catch (error) {
-    	this.error = error;
-    	// throw (error);
-    }
-    */
-  };
-
-  _proto.onOrientationDidChange = function onOrientationDidChange() {};
-
-  _proto.onObjectDown = function onObjectDown(event) {};
-
-  _proto.addListeners = function addListeners() {
-    /*
-    const orbit$ = this.orbit.observe$(this.container).pipe(
-    	shareReplay(1)
-    );
-    const orientation$ = orbit$.pipe(
-    	filter(event => event instanceof OrbitMoveEvent),
-    	auditTime(Math.floor(1000 / 15)),
-    );
-    orientation$.pipe(
-    	takeUntil(this.unsubscribe$),
-    ).subscribe(event => {
-    	this.onOrientationDidChange();
-    });
-    */
-    this.resize = this.resize.bind(this);
-    this.render = this.render.bind(this);
-    this.onMouseDown = this.onMouseDown.bind(this);
-    this.onMouseMove = this.onMouseMove.bind(this);
-    this.onMouseUp = this.onMouseUp.bind(this);
-    this.onMouseWheel = this.onMouseWheel.bind(this);
-    window.addEventListener('resize', this.resize, false);
-    this.container.addEventListener('wheel', this.onMouseWheel, false);
-    this.container.addEventListener('mousedown', this.onMouseDown, false);
-    this.container.addEventListener('mouseup', this.onMouseUp, false);
-    document.addEventListener('mousemove', this.onMouseMove, false);
-  };
-
-  _proto.removeListeners = function removeListeners() {
-    window.removeEventListener('resize', this.resize, false);
-    window.removeEventListener('resize', this.resize, false);
-    document.removeEventListener('mousemove', this.onMouseMove, false);
-    document.removeEventListener('wheel', this.onMouseWheel, false);
-    this.container.removeEventListener('mousedown', this.onMouseDown, false);
-    this.container.removeEventListener('mouseup', this.onMouseUp, false);
-  };
-
-  _createClass(WorldComponent, [{
-    key: "error",
-    get: function get() {
-      return this.error_;
-    },
-    set: function set(error) {
-      if (this.error_ !== error) {
-        this.error_ = error;
-        this.pushChanges();
-      }
-    }
-  }, {
-    key: "debugging",
-    get: function get() {
-      // return STATIC || DEBUG;
-      return DEBUG;
-    }
-  }, {
-    key: "locked",
-    get: function get() {
-      return this.state.locked || this.state.spying;
-    }
-  }, {
-    key: "lockedOrXR",
-    get: function get() {
-      return this.locked || this.renderer.xr.isPresenting;
-    }
-  }, {
-    key: "showPointer",
-    get: function get() {
-      return this.pointer.mesh.parent != null;
-    },
-    set: function set(showPointer) {
-      if (this.showPointer !== showPointer) {
-        showPointer ? this.scene.add(this.pointer.mesh) : this.scene.remove(this.pointer.mesh); // console.log('showPointer', showPointer);
-      }
-    }
-  }]);
-
-  return WorldComponent;
-}(rxcomp.Component);
-WorldComponent.meta = {
-  selector: '[world]'
-};var deg = THREE.Math.degToRad;
-var GEOMETRY = new THREE.BoxBufferGeometry(1, 1, 1); // const GEOMETRY = new THREE.IcosahedronBufferGeometry(0.5, 1);
-
-var ModelComponent = /*#__PURE__*/function (_Component) {
-  _inheritsLoose(ModelComponent, _Component);
-
-  function ModelComponent() {
-    return _Component.apply(this, arguments) || this;
-  }
-
-  var _proto = ModelComponent.prototype;
-
-  _proto.onInit = function onInit() {
-    var _this = this;
-
-    // console.log('ModelComponent.onInit');
-    // console.log('item', this.item, 'host', this.host);
-    if (!this.host) {
-      throw 'ModelComponent host is undefined';
-    }
-
-    this.scale = new THREE.Vector3(1.0, 1.0, 1.0);
-    this.position = new THREE.Vector3();
-    var group = this.group = new THREE.Group();
-    group.name = this.getName();
-
-    group.userData.render = function (time, tick) {
-      // if (this.intersection) {
-      _this.render(_this, time, tick); // }
-
-    };
-
-    this.getContainer().add(group);
-    this.onCreate(function (mesh, item) {
-      return _this.onMount(mesh, item);
-    }, function (mesh, item) {
-      return _this.onDismount(mesh, item);
-    });
-  };
-
-  _proto.onDestroy = function onDestroy() {
-    var group = this.group;
-    this.getContainer().remove(group);
-    delete group.userData.render;
-    this.disposeObject(group);
-    this.group = null;
-  };
-
-  _proto.getContainer = function getContainer() {
-    return this.host.objects;
-  };
-
-  _proto.getName = function getName(name) {
-    return this.constructor.meta.selector + "-" + this.rxcompId + (name ? "-" + name : '');
-  };
-
-  _proto.onCreate = function onCreate(mounth, dismount) {
-    var material = new THREE.MeshStandardMaterial({
-      color: new THREE.Color('#ffcc00'),
-      roughness: 0.4,
-      metalness: 0.01,
-      flatShading: true,
-      transparent: true,
-      opacity: 0.9
-    });
-    var mesh = new THREE.Mesh(GEOMETRY, material);
-
-    if (typeof mounth === 'function') {
-      mounth(mesh);
-    }
-
-    return mesh;
-  };
-
-  _proto.onMount = function onMount(mesh, item) {
-    var _this2 = this;
-
-    if (this.mesh) {
-      // console.log('ModelComponent.dismount.mesh');
-      this.onDismount(this.mesh);
-    }
-
-    mesh.name = this.getName('mesh');
-    this.mesh = mesh;
-
-    if (item) {
-      item.mesh = mesh;
-
-      item.onUpdate = function () {
-        _this2.onUpdate(item, mesh);
-      };
-
-      item.onUpdateAsset = function () {
-        _this2.onUpdateAsset(item, mesh);
-      };
-    }
-
-    this.group.add(mesh); // this.host.render(); !!!
-
-    /*
-    const node = this.node;
-    DomService.scrollIntersection$(node).subscribe(event => {
-    	this.scroll = event.scroll;
-    	this.intersection = event.intersection;
-    	this.calculateScaleAndPosition();
-    });
-    */
-    // console.log('Model.loaded', mesh);
-  };
-
-  _proto.onDismount = function onDismount(mesh, item) {
-    this.group.remove(mesh);
-
-    if (typeof mesh.dispose === 'function') {
-      mesh.dispose();
-    }
-
-    this.disposeObject(mesh);
-    this.mesh = null;
-
-    if (item) {
-      delete item.mesh;
-      delete item.onUpdate;
-      delete item.onUpdateAsset;
-    }
-  };
-
-  _proto.disposeObject = function disposeObject(object) {
-    object.traverse(function (child) {
-      if (child.isInteractiveMesh || child.isInteractiveSprite) {
-        Interactive.dispose(child);
-      }
-
-      if (child.isMesh) {
-        if (child.material.map && child.material.map.disposable !== false) {
-          child.material.map.dispose();
-        }
-
-        child.material.dispose();
-        child.geometry.dispose();
-      } else if (child.isSprite) {
-        if (child.material.map && child.material.map.disposable !== false) {
-          child.material.map.dispose();
-        }
-
-        child.material.dispose();
-      }
-    }); // console.log('ModelComponent.disposeObject', object);
-  };
-
-  _proto.calculateScaleAndPosition = function calculateScaleAndPosition() {
-    var _getContext = rxcomp.getContext(this),
-        node = _getContext.node;
-
-    this.host.repos(this, node.getBoundingClientRect());
-  };
-
-  _proto.render = function render(time, tick) {
-    /*
-    this.calculateScaleAndPosition();
-    const group = this.group;
-    const scale = this.scale;
-    // group.scale.set(scale.x, scale.y, scale.z);
-    const position = this.position;
-    group.position.set(position.x, 0, 0);
-    // const tween = this.tween();
-    // group.rotation.x = deg(180) * tween;
-    // group.rotation.y = deg(360) * tween;
-    */
-  };
-
-  _proto.getScroll = function getScroll(offset) {
-    var scroll = this.intersection.scroll(offset); // console.log(scroll);
-
-    return scroll;
-  };
-
-  _proto.getTween = function getTween(offset) {
-    var tween = Math.min(0.0, this.intersection.offset(offset)) + 1;
-    tween = Math.max(0.0, tween); // tween = Ease.Sine.InOut(tween);
-
-    tween -= 1;
-    return tween;
-  } // called by UpdateViewItemComponent
-  ;
-
-  _proto.onUpdate = function onUpdate(item, mesh) {} // called by UpdateViewItemComponent
-  ;
-
-  _proto.onUpdateAsset = function onUpdateAsset(item, mesh) {};
-
-  _createClass(ModelComponent, [{
-    key: "renderOrder",
-    set: function set(renderOrder) {
-      this.group.renderOrder = renderOrder;
-    }
-  }]);
-
-  return ModelComponent;
-}(rxcomp.Component);
-ModelComponent.meta = {
-  selector: '[model]',
-  hosts: {
-    host: WorldComponent
-  },
-  inputs: ['item']
-};var ORIGIN$1 = new THREE.Vector3();
+} )();var ORIGIN$1 = new THREE.Vector3();
 var BULGE_DISTANCE = 0.8;
 
 var ParticlePoint = /*#__PURE__*/function (_THREE$Vector) {
@@ -34236,7 +34145,115 @@ var ParticlePoint = /*#__PURE__*/function (_THREE$Vector) {
   };
 
   return ParticlePoint;
-}(THREE.Vector3);var SCALE = 2;
+}(THREE.Vector3);var Particles = /*#__PURE__*/function () {
+  function Particles() {}
+
+  Particles.getParticles = function getParticles(mesh, scale) {
+    var target, targetMesh;
+    mesh.traverse(function (child) {
+      if (child.isMesh) {
+        child.material = new THREE.MeshBasicMaterial({
+          visible: false
+        });
+        targetMesh = child;
+        target = child.geometry;
+      }
+    });
+    var points = [];
+    var vertexCount = targetMesh.geometry.getAttribute('position').count * 3;
+    var sampler = new MeshSurfaceSampler(targetMesh).setWeightAttribute(null).build(); // ; 'uv';
+
+    var _position = new THREE.Vector3();
+
+    var _normal = new THREE.Vector3();
+
+    for (var i = 0; i < vertexCount; i++) {
+      sampler.sample(_position, _normal); // _normal.add( _position );
+
+      var point = new ParticlePoint(_position.clone().multiplyScalar(scale), i, vertexCount);
+      points.push(point); // dummy.lookAt( _normal );
+      // dummy.updateMatrix();
+    }
+
+    var amount = points.length;
+    var geometry = this.geometry = new THREE.BufferGeometry();
+    var positions = this.positions = new Float32Array(amount * 3);
+    var colors = new Float32Array(amount * 3);
+    var color = new THREE.Color();
+
+    points.forEach(function (p, i) {
+      // positions
+      positions[i * 3] = p.x;
+      positions[i * 3 + 1] = p.y;
+      positions[i * 3 + 2] = p.z; // colors
+
+      /*
+      const vx = (p.x / n) + 0.5;
+      const vy = (p.y / n) + 0.5;
+      const vz = (p.z / n) + 0.5;
+      color.setRGB(vx, vy, vz);
+      */
+
+      color.setRGB(113 / 255, 64 / 255, 253 / 255);
+      colors[i * 3] = color.r;
+      colors[i * 3 + 1] = color.g;
+      colors[i * 3 + 2] = color.b; // point
+
+      p.positions = positions;
+      p.geometry = geometry;
+    });
+    this.particlePoints = points;
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    geometry.computeBoundingSphere();
+    var texture = new THREE.CanvasTexture(this.getTexture());
+    var material = new THREE.PointsMaterial({
+      size: 0.01,
+      map: texture,
+      vertexColors: THREE.VertexColors,
+      blending: THREE.NormalBlending,
+      // THREE.NoBlending, // THREE.AdditiveBlending, // THREE.NormalBlending, // THREE.AdditiveBlending,
+      depthTest: false,
+      transparent: true
+    });
+    var particles = new THREE.Points(geometry, material);
+    return particles;
+  };
+
+  Particles.render = function render(particles, intersection) {
+    var particlePoints = this.particlePoints;
+
+    if (particles && particlePoints && particlePoints.length) {
+      var intersectionPoint = intersection ? particles.worldToLocal(intersection.point) : null;
+      particlePoints.forEach(function (x) {
+        return x.render(intersectionPoint);
+      });
+      var point = particlePoints[0];
+      var positions = point.positions;
+      var geometry = point.geometry;
+      geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      geometry.attributes.position.needsUpdate = true; // geometry.computeBoundingSphere();
+    }
+  };
+
+  Particles.getTexture = function getTexture() {
+    var canvas = document.createElement('canvas');
+    canvas.width = 64;
+    canvas.height = 64;
+    var ctx = canvas.getContext('2d');
+    var gradient = ctx.createRadialGradient(canvas.width / 2, canvas.height / 2, 0, canvas.width / 2, canvas.height / 2, canvas.width / 2);
+    gradient.addColorStop(0, 'rgba(113,64,235,1)');
+    gradient.addColorStop(0.1, 'rgba(113,64,235,1)');
+    gradient.addColorStop(0.9, 'rgba(113,64,235,.05)');
+    gradient.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = gradient; // "#FFFFFF"; // gradient;
+
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    return canvas;
+  };
+
+  return Particles;
+}();var SCALE = 2;
 
 var deg$1 = function deg(v) {
   return v * Math.PI / 180;
@@ -34252,11 +34269,22 @@ var ModelMoreComponent = /*#__PURE__*/function (_ModelComponent) {
   var _proto = ModelMoreComponent.prototype;
 
   _proto.onInit = function onInit() {
+    var _this = this;
+
     _ModelComponent.prototype.onInit.call(this);
 
     this.z = 0;
     this.progress = null;
     this.addListeners();
+
+    window.animateToIndex = function (index, callback) {
+      _this.animateToIndex(index, callback);
+    };
+
+    var _getContext = rxcomp.getContext(this),
+        node = _getContext.node;
+
+    node.classList.add('ready');
   };
 
   _proto.onDestroy = function onDestroy() {
@@ -34266,10 +34294,10 @@ var ModelMoreComponent = /*#__PURE__*/function (_ModelComponent) {
   };
 
   _proto.onCreate = function onCreate(mount, dismount) {
-    var _this = this;
+    var _this2 = this;
 
     this.loadGlb(environment.getPath('/models/'), 'more_logo2.glb', function (mesh, animations) {
-      _this.onGlbLoaded(mesh, animations, mount, dismount);
+      _this2.onGlbLoaded(mesh, animations, mount, dismount);
     });
   };
 
@@ -34324,50 +34352,6 @@ var ModelMoreComponent = /*#__PURE__*/function (_ModelComponent) {
     }
   };
 
-  _proto.onClipToggle = function onClipToggle() {
-    var actions = this.actions;
-
-    if (actions.length === 1) {
-      var action = actions[0];
-
-      if (this.actionIndex === -1) {
-        this.actionIndex = 0;
-
-        if (action.paused || action.timeScale === 0) {
-          action.paused = false;
-        } else {
-          action.play();
-        }
-      } else if (this.actionIndex === 0) {
-        this.actionIndex = -1;
-        action.halt(0.3);
-      }
-    } else if (actions.length > 1) {
-      if (this.actionIndex > -1 && this.actionIndex < actions.length) {
-        var previousClip = actions[this.actionIndex];
-        previousClip.halt(0.3);
-      }
-
-      this.actionIndex++;
-
-      if (this.actionIndex === actions.length) {
-        this.actionIndex = -1; // nothing
-      } else {
-        var _action = actions[this.actionIndex]; // console.log(this.actionIndex, action);
-
-        if (_action.paused) {
-          _action.paused = false;
-        }
-
-        if (_action.timeScale === 0) {
-          _action.timeScale = 1;
-        }
-
-        _action.play();
-      }
-    }
-  };
-
   _proto.onGlbLoaded = function onGlbLoaded(mesh, animations, mount, dismount) {
     // animations
     this.parseAnimations(mesh, animations); // scale
@@ -34388,34 +34372,10 @@ var ModelMoreComponent = /*#__PURE__*/function (_ModelComponent) {
     });
     var plane = this.plane = new THREE.Mesh(geometry, material);
     dummy.add(plane);
-    /*
-    box.setFromObject(dummy);
-    const center = box.getCenter(new THREE.Vector3());
-    const endY = 0; // dummy.position.y;
-    const from = { tween: 1 };
-    const onUpdate = () => {
-    	dummy.position.y = endY + 3 * from.tween;
-    	dummy.rotation.y = 0 + Math.PI * from.tween;
-    };
-    onUpdate();
-    */
-
-    var particles = this.particles = this.getParticles(mesh, scale);
+    var particles = this.particles = Particles.getParticles(mesh, scale);
     dummy.add(particles);
     this.makeInteractive(plane);
     this.makeAnimation();
-    /*
-    gsap.to(from, {
-    	duration: 1.5,
-    	tween: 0,
-    	delay: 0.1,
-    	ease: Power2.easeInOut,
-    	onUpdate: onUpdate,
-    	onComplete: () => {
-    		console.log('complete', dummy.position.y);
-    	}
-    });
-    */
 
     if (typeof mount === 'function') {
       mount(dummy);
@@ -34423,7 +34383,7 @@ var ModelMoreComponent = /*#__PURE__*/function (_ModelComponent) {
   };
 
   _proto.makeAnimation = function makeAnimation() {
-    var animations = this.animations || (this.animations = [new THREE.Vector3(-deg$1(70), deg$1(20), 0), new THREE.Vector3(-deg$1(70), deg$1(-20), 0), new THREE.Vector3(-deg$1(70), deg$1(20), deg$1(45)), new THREE.Vector3(-deg$1(70), deg$1(-20), deg$1(-45)), new THREE.Vector3(0, 0, 0)]);
+    var animations = this.animations || (this.animations = [new THREE.Vector3(-deg$1(70), deg$1(20), 0), new THREE.Vector3(-deg$1(70), deg$1(-20), 0), new THREE.Vector3(0, 0, 0), new THREE.Vector3(-deg$1(70), deg$1(20), deg$1(45)), new THREE.Vector3(-deg$1(70), deg$1(-20), deg$1(-45)), new THREE.Vector3(-deg$1(90), 0, 0)]);
     var animationIndex = this.animationIndex != null ? this.animationIndex : this.animationIndex = 0;
     var a = this.a != null ? this.a : this.a = new THREE.Vector3();
     a.copy(animations[animationIndex]);
@@ -34431,31 +34391,29 @@ var ModelMoreComponent = /*#__PURE__*/function (_ModelComponent) {
   };
 
   _proto.animate = function animate() {
-    var _this2 = this;
+  };
 
-    setTimeout(function () {
-      var a = _this2.a;
-      var animations = _this2.animations;
-      var animationIndex = (_this2.animationIndex + 1) % animations.length;
-      _this2.animationIndex = animationIndex;
-      var animation = animations[animationIndex];
-      gsap.to(a, {
-        x: animation.x,
-        y: animation.y,
-        z: animation.z,
-        duration: 1,
-        delay: 0.1,
-        ease: Power2.easeInOut,
-        onComplete: function onComplete() {
-          _this2.animate();
+  _proto.animateToIndex = function animateToIndex(animationIndex, complete) {
+    var a = this.a;
+    var animations = this.animations;
+    var animation = animations[animationIndex];
+    gsap.to(a, {
+      x: animation.x,
+      y: animation.y,
+      z: animation.z,
+      duration: 1,
+      delay: 0.1,
+      ease: Power2.easeInOut,
+      onComplete: function onComplete() {
+        if (typeof complete === 'function') {
+          complete();
         }
-      });
-    }, 4000);
+      }
+    });
   };
 
   _proto.render = function render(time, tick) {
     var mesh = this.mesh;
-    var group = this.group;
     var mixer = this.mixer;
     var clock = this.clock;
     var a = this.a;
@@ -34470,24 +34428,8 @@ var ModelMoreComponent = /*#__PURE__*/function (_ModelComponent) {
       mesh.rotation.z = a.z + z;
       mesh.scale.x = state.z;
       mesh.scale.y = state.z;
-      mesh.scale.z = state.z; // mesh.rotation.x += 0.001;
-      // mesh.rotation.y += 0.001;
-
-      var particles = this.particles;
-      var particlePoints = this.particlePoints;
-
-      if (particles && particlePoints && particlePoints.length) {
-        var intersection = this.getIntersection();
-        var intersectionPoint = intersection ? particles.worldToLocal(intersection.point) : null;
-        particlePoints.forEach(function (x) {
-          return x.render(intersectionPoint);
-        });
-        var point = particlePoints[0];
-        var positions = point.positions;
-        var geometry = point.geometry;
-        geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-        geometry.attributes.position.needsUpdate = true; // geometry.computeBoundingSphere();
-      }
+      mesh.scale.z = state.z;
+      Particles.render(this.particles, this.getIntersection());
     }
 
     if (mixer) {
@@ -34532,22 +34474,8 @@ var ModelMoreComponent = /*#__PURE__*/function (_ModelComponent) {
     return overing;
   };
 
-  ModelMoreComponent.getInteractiveDescriptors = function getInteractiveDescriptors() {
-    var descriptors = ModelMoreComponent.interactiveDescriptors;
-
-    if (!descriptors) {
-      var freezableDescriptors = Object.getOwnPropertyDescriptors(FreezableMesh.prototype);
-      var emittableDescriptors = Object.getOwnPropertyDescriptors(EmittableMesh.prototype);
-      var interactiveDescriptors = Object.getOwnPropertyDescriptors(InteractiveMesh.prototype);
-      descriptors = Object.assign({}, freezableDescriptors, emittableDescriptors, interactiveDescriptors);
-      ModelMoreComponent.interactiveDescriptors = descriptors;
-    }
-
-    return descriptors;
-  };
-
   _proto.makeInteractive = function makeInteractive(mesh) {
-    var _this3 = this;
+    var _this4 = this;
 
     var interactiveDescriptors = ModelMoreComponent.getInteractiveDescriptors();
     mesh.traverse(function (child) {
@@ -34564,90 +34492,19 @@ var ModelMoreComponent = /*#__PURE__*/function (_ModelComponent) {
         child.down_ = false;
         Interactive.items.push(child);
         child.on('over', function () {
-          _this3.over = true;
+          _this4.over = true;
         });
         child.on('out', function () {
-          _this3.over = false;
+          _this4.over = false;
         });
-        child.on('down', function () {
-          _this3.onClipToggle();
-
-          console.log('onDown');
+        /*
+        child.on('down', () => {
+        	this.onClipToggle();
+        	console.log('onDown');
         });
+        */
       }
     });
-  };
-
-  _proto.getParticles = function getParticles(mesh, scale) {
-    var target, targetMesh;
-    mesh.traverse(function (child) {
-      if (child.isMesh) {
-        child.material = new THREE.MeshBasicMaterial({
-          visible: false
-        });
-        targetMesh = child;
-        target = child.geometry;
-      }
-    });
-    var points = [];
-    var vertexCount = targetMesh.geometry.getAttribute('position').count * 3;
-    var sampler = new MeshSurfaceSampler(targetMesh).setWeightAttribute(null).build(); // ; 'uv';
-
-    var _position = new THREE.Vector3();
-
-    var _normal = new THREE.Vector3();
-
-    for (var i = 0; i < vertexCount; i++) {
-      sampler.sample(_position, _normal); // _normal.add( _position );
-
-      var point = new ParticlePoint(_position.clone().multiplyScalar(scale), i, vertexCount);
-      points.push(point); // dummy.lookAt( _normal );
-      // dummy.updateMatrix();
-    }
-
-    var amount = points.length;
-    var geometry = new THREE.BufferGeometry();
-    var positions = new Float32Array(amount * 3);
-    var colors = new Float32Array(amount * 3);
-    var color = new THREE.Color();
-
-    points.forEach(function (p, i) {
-      // positions
-      positions[i * 3] = p.x;
-      positions[i * 3 + 1] = p.y;
-      positions[i * 3 + 2] = p.z; // colors
-
-      /*
-      const vx = (p.x / n) + 0.5;
-      const vy = (p.y / n) + 0.5;
-      const vz = (p.z / n) + 0.5;
-      color.setRGB(vx, vy, vz);
-      */
-
-      color.setRGB(113 / 255, 64 / 255, 253 / 255);
-      colors[i * 3] = color.r;
-      colors[i * 3 + 1] = color.g;
-      colors[i * 3 + 2] = color.b; // point
-
-      p.positions = positions;
-      p.geometry = geometry;
-    });
-    this.particlePoints = points;
-    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-    geometry.computeBoundingSphere();
-    var texture = new THREE.CanvasTexture(this.getTexture());
-    var material = new THREE.PointsMaterial({
-      size: 0.01,
-      map: texture,
-      vertexColors: THREE.VertexColors,
-      blending: THREE.NormalBlending,
-      // THREE.NoBlending, // THREE.AdditiveBlending, // THREE.NormalBlending, // THREE.AdditiveBlending,
-      depthTest: false,
-      transparent: true
-    });
-    var particles = new THREE.Points(geometry, material);
-    return particles;
   };
 
   _proto.onMove = function onMove(event) {
@@ -34674,20 +34531,48 @@ var ModelMoreComponent = /*#__PURE__*/function (_ModelComponent) {
     this.mouse = mouse;
   };
 
-  _proto.getTexture = function getTexture() {
-    var canvas = document.createElement('canvas');
-    canvas.width = 64;
-    canvas.height = 64;
-    var ctx = canvas.getContext('2d');
-    var gradient = ctx.createRadialGradient(canvas.width / 2, canvas.height / 2, 0, canvas.width / 2, canvas.height / 2, canvas.width / 2);
-    gradient.addColorStop(0, 'rgba(113,64,235,1)');
-    gradient.addColorStop(0.1, 'rgba(113,64,235,1)');
-    gradient.addColorStop(0.9, 'rgba(113,64,235,.05)');
-    gradient.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = gradient; // "#FFFFFF"; // gradient;
+  _proto.onClipToggle = function onClipToggle() {
+    var actions = this.actions;
 
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    return canvas;
+    if (actions.length === 1) {
+      var action = actions[0];
+
+      if (this.actionIndex === -1) {
+        this.actionIndex = 0;
+
+        if (action.paused || action.timeScale === 0) {
+          action.paused = false;
+        } else {
+          action.play();
+        }
+      } else if (this.actionIndex === 0) {
+        this.actionIndex = -1;
+        action.halt(0.3);
+      }
+    } else if (actions.length > 1) {
+      if (this.actionIndex > -1 && this.actionIndex < actions.length) {
+        var previousClip = actions[this.actionIndex];
+        previousClip.halt(0.3);
+      }
+
+      this.actionIndex++;
+
+      if (this.actionIndex === actions.length) {
+        this.actionIndex = -1; // nothing
+      } else {
+        var _action = actions[this.actionIndex]; // console.log(this.actionIndex, action);
+
+        if (_action.paused) {
+          _action.paused = false;
+        }
+
+        if (_action.timeScale === 0) {
+          _action.timeScale = 1;
+        }
+
+        _action.play();
+      }
+    }
   };
 
   _proto.addListeners = function addListeners() {
@@ -34701,6 +34586,20 @@ var ModelMoreComponent = /*#__PURE__*/function (_ModelComponent) {
     var target = document.querySelector('.world canvas');
     target.removeEventListener('mousemove', this.onMove);
     target.removeEventListener('touchmove', this.onMove);
+  };
+
+  ModelMoreComponent.getInteractiveDescriptors = function getInteractiveDescriptors() {
+    var descriptors = ModelMoreComponent.interactiveDescriptors;
+
+    if (!descriptors) {
+      var freezableDescriptors = Object.getOwnPropertyDescriptors(FreezableMesh.prototype);
+      var emittableDescriptors = Object.getOwnPropertyDescriptors(EmittableMesh.prototype);
+      var interactiveDescriptors = Object.getOwnPropertyDescriptors(InteractiveMesh.prototype);
+      descriptors = Object.assign({}, freezableDescriptors, emittableDescriptors, interactiveDescriptors);
+      ModelMoreComponent.interactiveDescriptors = descriptors;
+    }
+
+    return descriptors;
   };
 
   _createClass(ModelMoreComponent, [{
