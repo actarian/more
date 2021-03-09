@@ -8,6 +8,7 @@ import Interactive from '../interactive/interactive';
 import InteractiveMesh from '../interactive/interactive.mesh';
 import WorldComponent from '../world.component';
 import ModelComponent from './model.component';
+import { ParticlePoint } from './particle';
 
 const SCALE = 2;
 const BULGE_DISTANCE = 0.8;
@@ -46,7 +47,7 @@ export default class ModelMoreComponent extends ModelComponent {
 	}
 
 	onCreate(mount, dismount) {
-		this.loadGlb(environment.getPath('/models/'), 'more_logo.glb', (mesh, animations) => {
+		this.loadGlb(environment.getPath('/models/'), 'more_logo2.glb', (mesh, animations) => {
 			this.onGlbLoaded(mesh, animations, mount, dismount);
 		});
 	}
@@ -265,9 +266,11 @@ export default class ModelMoreComponent extends ModelComponent {
 	}
 
 	getIntersection() {
+		/*
 		if (this.plane.intersection) {
 			return this.plane.intersection;
 		}
+		*/
 		let intersection;
 		this.mesh.traverse((child) => {
 			if (child.isMesh && child.intersection) {
@@ -343,9 +346,8 @@ export default class ModelMoreComponent extends ModelComponent {
 				target = child.geometry;
 			}
 		});
-		let amount = 50000;
 		const points = [];
-		const vertexCount = targetMesh.geometry.getAttribute('position').count;
+		const vertexCount = targetMesh.geometry.getAttribute('position').count * 3;
 		const sampler = new MeshSurfaceSampler(targetMesh)
 			.setWeightAttribute(null)
 			.build();
@@ -360,7 +362,7 @@ export default class ModelMoreComponent extends ModelComponent {
 			// dummy.lookAt( _normal );
 			// dummy.updateMatrix();
 		}
-		amount = points.length;
+		const amount = points.length;
 		const geometry = new THREE.BufferGeometry();
 		const positions = new Float32Array(amount * 3);
 		const colors = new Float32Array(amount * 3);
@@ -392,7 +394,7 @@ export default class ModelMoreComponent extends ModelComponent {
 		geometry.computeBoundingSphere();
 		const texture = new THREE.CanvasTexture(this.getTexture());
 		const material = new THREE.PointsMaterial({
-			size: 0.02,
+			size: 0.01,
 			map: texture,
 			vertexColors: THREE.VertexColors,
 			blending: THREE.NormalBlending, // THREE.NoBlending, // THREE.AdditiveBlending, // THREE.NormalBlending, // THREE.AdditiveBlending,
@@ -466,47 +468,3 @@ ModelMoreComponent.meta = {
 	hosts: { host: WorldComponent },
 	outputs: ['down'],
 };
-
-export class ParticlePoint extends THREE.Vector3 {
-	constructor(vector, index, length) {
-		super(vector.x, vector.y, vector.z);
-		this.index = index;
-		this.length = length;
-		this.p = new THREE.Vector3();
-		this.v = new THREE.Vector3();
-		this.t = new THREE.Vector3(vector.x, vector.y, vector.z).multiplyScalar(2 * index / length);
-	}
-
-	render(intersection) {
-		const i = this.index;
-		const positions = this.positions;
-		const p = this.p;
-		p.x = Math.random() * 0.1;
-		p.y = Math.random() * 0.1;
-		p.z = Math.random() * 0.1;
-		if (intersection) {
-			const v = this.v;
-			v.subVectors(this, intersection);
-			// const d = intersection.distanceTo(this);
-			const l = v.length();
-			let pow = Math.max(0, BULGE_DISTANCE - l);
-			if (pow > 0) {
-				pow = this.easeQuadOut(pow);
-				v.normalize();
-				p.add(v.multiplyScalar(pow));
-			}
-		}
-		const t = this.t;
-		t.lerp(p, 0.02);
-		const x = this.x + t.x;
-		const y = this.y + t.y;
-		const z = this.z + t.z;
-		positions[i * 3] = x;
-		positions[i * 3 + 1] = y;
-		positions[i * 3 + 2] = z;
-	}
-
-	easeQuadOut(t) {
-		return -1.0 * t * (t - 2.0);
-	}
-}

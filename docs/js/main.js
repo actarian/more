@@ -34177,8 +34177,66 @@ ModelComponent.meta = {
     host: WorldComponent
   },
   inputs: ['item']
-};var SCALE = 2;
+};var ORIGIN$1 = new THREE.Vector3();
 var BULGE_DISTANCE = 0.8;
+
+var ParticlePoint = /*#__PURE__*/function (_THREE$Vector) {
+  _inheritsLoose(ParticlePoint, _THREE$Vector);
+
+  function ParticlePoint(vector, index, length) {
+    var _this;
+
+    _this = _THREE$Vector.call(this, vector.x, vector.y, vector.z) || this;
+    _this.index = index;
+    _this.length = length;
+    _this.p = new THREE.Vector3();
+    _this.v = new THREE.Vector3();
+    _this.t = new THREE.Vector3(vector.x, vector.y, vector.z).multiplyScalar(2 * index / length);
+    return _this;
+  }
+
+  var _proto = ParticlePoint.prototype;
+
+  _proto.render = function render(intersection) {
+    var i = this.index;
+    var positions = this.positions;
+    var p = this.p;
+
+    {
+      // p.set(0, 0, 0);
+      p.lerp(ORIGIN$1, 0.25);
+    }
+
+    if (intersection) {
+      var v = this.v;
+      v.subVectors(this, intersection); // const d = intersection.distanceTo(this);
+
+      var l = v.length();
+      var pow = Math.max(0, BULGE_DISTANCE - l);
+
+      if (pow > 0) {
+        pow = this.easeQuadOut(pow);
+        v.normalize();
+        p.add(v.multiplyScalar(pow));
+      }
+    }
+
+    var t = this.t;
+    t.lerp(p, 0.02);
+    var x = this.x + t.x;
+    var y = this.y + t.y;
+    var z = this.z + t.z;
+    positions[i * 3] = x;
+    positions[i * 3 + 1] = y;
+    positions[i * 3 + 2] = z;
+  };
+
+  _proto.easeQuadOut = function easeQuadOut(t) {
+    return -1.0 * t * (t - 2.0);
+  };
+
+  return ParticlePoint;
+}(THREE.Vector3);var SCALE = 2;
 
 var deg$1 = function deg(v) {
   return v * Math.PI / 180;
@@ -34210,7 +34268,7 @@ var ModelMoreComponent = /*#__PURE__*/function (_ModelComponent) {
   _proto.onCreate = function onCreate(mount, dismount) {
     var _this = this;
 
-    this.loadGlb(environment.getPath('/models/'), 'more_logo.glb', function (mesh, animations) {
+    this.loadGlb(environment.getPath('/models/'), 'more_logo2.glb', function (mesh, animations) {
       _this.onGlbLoaded(mesh, animations, mount, dismount);
     });
   };
@@ -34439,10 +34497,11 @@ var ModelMoreComponent = /*#__PURE__*/function (_ModelComponent) {
   };
 
   _proto.getIntersection = function getIntersection() {
+    /*
     if (this.plane.intersection) {
-      return this.plane.intersection;
+    	return this.plane.intersection;
     }
-
+    */
     var intersection;
     this.mesh.traverse(function (child) {
       if (child.isMesh && child.intersection) {
@@ -34530,9 +34589,8 @@ var ModelMoreComponent = /*#__PURE__*/function (_ModelComponent) {
         target = child.geometry;
       }
     });
-    var amount = 50000;
     var points = [];
-    var vertexCount = targetMesh.geometry.getAttribute('position').count;
+    var vertexCount = targetMesh.geometry.getAttribute('position').count * 3;
     var sampler = new MeshSurfaceSampler(targetMesh).setWeightAttribute(null).build(); // ; 'uv';
 
     var _position = new THREE.Vector3();
@@ -34547,7 +34605,7 @@ var ModelMoreComponent = /*#__PURE__*/function (_ModelComponent) {
       // dummy.updateMatrix();
     }
 
-    amount = points.length;
+    var amount = points.length;
     var geometry = new THREE.BufferGeometry();
     var positions = new Float32Array(amount * 3);
     var colors = new Float32Array(amount * 3);
@@ -34580,7 +34638,7 @@ var ModelMoreComponent = /*#__PURE__*/function (_ModelComponent) {
     geometry.computeBoundingSphere();
     var texture = new THREE.CanvasTexture(this.getTexture());
     var material = new THREE.PointsMaterial({
-      size: 0.02,
+      size: 0.01,
       map: texture,
       vertexColors: THREE.VertexColors,
       blending: THREE.NormalBlending,
@@ -34675,62 +34733,7 @@ ModelMoreComponent.meta = {
     host: WorldComponent
   },
   outputs: ['down']
-};
-var ParticlePoint = /*#__PURE__*/function (_THREE$Vector) {
-  _inheritsLoose(ParticlePoint, _THREE$Vector);
-
-  function ParticlePoint(vector, index, length) {
-    var _this4;
-
-    _this4 = _THREE$Vector.call(this, vector.x, vector.y, vector.z) || this;
-    _this4.index = index;
-    _this4.length = length;
-    _this4.p = new THREE.Vector3();
-    _this4.v = new THREE.Vector3();
-    _this4.t = new THREE.Vector3(vector.x, vector.y, vector.z).multiplyScalar(2 * index / length);
-    return _this4;
-  }
-
-  var _proto2 = ParticlePoint.prototype;
-
-  _proto2.render = function render(intersection) {
-    var i = this.index;
-    var positions = this.positions;
-    var p = this.p;
-    p.x = Math.random() * 0.1;
-    p.y = Math.random() * 0.1;
-    p.z = Math.random() * 0.1;
-
-    if (intersection) {
-      var v = this.v;
-      v.subVectors(this, intersection); // const d = intersection.distanceTo(this);
-
-      var l = v.length();
-      var pow = Math.max(0, BULGE_DISTANCE - l);
-
-      if (pow > 0) {
-        pow = this.easeQuadOut(pow);
-        v.normalize();
-        p.add(v.multiplyScalar(pow));
-      }
-    }
-
-    var t = this.t;
-    t.lerp(p, 0.02);
-    var x = this.x + t.x;
-    var y = this.y + t.y;
-    var z = this.z + t.z;
-    positions[i * 3] = x;
-    positions[i * 3 + 1] = y;
-    positions[i * 3 + 2] = z;
-  };
-
-  _proto2.easeQuadOut = function easeQuadOut(t) {
-    return -1.0 * t * (t - 2.0);
-  };
-
-  return ParticlePoint;
-}(THREE.Vector3);var AppModule = /*#__PURE__*/function (_Module) {
+};var AppModule = /*#__PURE__*/function (_Module) {
   _inheritsLoose(AppModule, _Module);
 
   function AppModule() {
